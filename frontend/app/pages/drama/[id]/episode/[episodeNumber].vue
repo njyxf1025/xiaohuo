@@ -248,6 +248,9 @@
                         <option value="中性">中性</option>
                       </select>
                       <span class="tag">{{ c.role || '角色' }}</span>
+                      <button class="btn btn-ghost btn-icon extract-del" @click="removeChar(c)" title="删除角色">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
                     </div>
                     <div class="extract-meta wrap">{{ c.description || c.appearance || c.personality || '暂无描述' }}</div>
                   </div>
@@ -270,6 +273,9 @@
                     <div class="extract-name-row">
                       <div class="extract-name">{{ s.location }}</div>
                       <span v-if="s.time" class="tag">{{ s.time }}</span>
+                      <button class="btn btn-ghost btn-icon extract-del" @click="removeScene(s)" title="删除场景">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
                     </div>
                     <div class="extract-meta wrap">{{ s.description || s.time || '等待补充场景描述' }}</div>
                   </div>
@@ -2467,6 +2473,18 @@ async function deleteShot(sb) {
   else selectedSb.value = null
 }
 
+async function removeChar(c) {
+  if (!confirm(`确定删除角色「${c.name}」？`)) return
+  await characterAPI.del(c.id)
+  chars.value = chars.value.filter(ch => ch.id !== c.id)
+}
+
+async function removeScene(s) {
+  if (!confirm(`确定删除场景「${s.location}」？`)) return
+  await sceneAPI.del(s.id)
+  scenes.value = scenes.value.filter(sc => sc.id !== s.id)
+}
+
 const scriptSteps = computed(() => {
   const hasScript = !!scriptContent.value
   const hasChars = chars.value.length > 0 && hasScript
@@ -3557,6 +3575,9 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 }
 .extract-meta { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .extract-meta.wrap { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.extract-del { margin-left: auto; opacity: 0; transition: opacity .15s; color: var(--text-3); }
+.extract-row:hover .extract-del { opacity: 1; }
+.extract-del:hover { color: var(--error); }
 
 /* Voice grid */
 .voice-stage { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 12px; }
