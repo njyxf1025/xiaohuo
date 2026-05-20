@@ -154,6 +154,29 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showStyleEdit" class="dialog-mask" @click.self="showStyleEdit = false">
+      <div class="dialog" style="max-width:400px">
+        <div class="dialog-head">
+          <h3>更换视觉风格</h3>
+          <button class="btn btn-ghost btn-icon" @click="showStyleEdit = false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div class="style-grid">
+            <button v-for="opt in styleOptions" :key="opt.value" :class="['style-option', selectedStyle === opt.value && 'active']" @click="selectedStyle = opt.value">
+              {{ opt.label }}
+            </button>
+          </div>
+          <p style="font-size:12px;color:var(--text-3);margin-top:12px)">更换后，后续生成的图片和视频将自动注入新风格提示词</p>
+        </div>
+        <div class="dialog-foot">
+          <button class="btn" @click="showStyleEdit = false">取消</button>
+          <button class="btn btn-primary" @click="changeStyle">确认更换</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -173,6 +196,10 @@ const audioConfigs = ref([])
 const newEpisodeImageConfigId = ref(null)
 const newEpisodeVideoConfigId = ref(null)
 const newEpisodeAudioConfigId = ref(null)
+const showStyleEdit = ref(false)
+const styleLabels = { realistic: '写实', anime: '动漫', ghibli: '吉卜力', cinematic: '电影感', comic: '漫画', watercolor: '水彩' }
+const styleOptions = Object.entries(styleLabels).map(([value, label]) => ({ label, value }))
+const selectedStyle = ref('')
 
 function hasScript(ep) { return !!(ep.script_content || ep.scriptContent) }
 
@@ -191,6 +218,19 @@ const canCreateEpisode = computed(() => !!(newEpisodeImageConfigId.value && newE
 async function load() {
   try {
     drama.value = await dramaAPI.get(dramaId)
+    selectedStyle.value = drama.value?.style || 'realistic'
+  } catch (e) {
+    toast.error(e.message)
+  }
+}
+
+async function changeStyle() {
+  if (!selectedStyle.value) return
+  try {
+    await dramaAPI.update(dramaId, { style: selectedStyle.value })
+    drama.value.style = selectedStyle.value
+    showStyleEdit.value = false
+    toast.success('风格已更新')
   } catch (e) {
     toast.error(e.message)
   }
@@ -284,6 +324,23 @@ onMounted(() => { load(); loadConfigs() })
   background: var(--accent-bg); color: var(--accent-text);
   border-radius: 99px; border: 1px solid rgba(184,120,20,0.12);
 }
+.style-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; margin-bottom: 12px;
+  background: var(--accent-bg); border: 1px solid rgba(184,120,20,0.12);
+  border-radius: 8px;
+}
+.style-banner-left { display: flex; align-items: center; gap: 8px; }
+.style-banner-icon { font-size: 16px; }
+.style-banner-text { font-size: 12px; color: var(--text-2); }
+.style-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.style-option {
+  padding: 10px 8px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-2); color: var(--text-1); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all .15s;
+}
+.style-option:hover { border-color: var(--accent); }
+.style-option.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-text); }
 .meta-divider { width: 3px; height: 3px; border-radius: 50%; background: var(--text-3); }
 .meta-item {
   display: flex; align-items: center; gap: 5px;
