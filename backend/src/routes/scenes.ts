@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, created, badRequest, notFound, now } from '../utils/response.js'
 import { generateImage } from '../services/image-generation.js'
+import { applyStyleToImagePrompt, getDramaStyle } from '../services/style-prompts.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
@@ -82,10 +83,13 @@ app.post('/:id/generate-image', async (c) => {
     : `Pure background scene. No characters, no people, no figures.`
   const prompt = userPrompt || `${basePrompt} ${characterRef} High quality, atmospheric lighting, consistent art style, no text, no watermark`
 
+  const dramaStyle = getDramaStyle(scene.dramaId)
+  const styledPrompt = applyStyleToImagePrompt(prompt, dramaStyle)
+
   try {
-    logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location, hasCharContext: !!charContext })
+    logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location, hasCharContext: !!charContext, style: dramaStyle })
     db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id)).run()
-    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt: styledPrompt, configId: ep.imageConfigId ?? undefined })
     logTaskSuccess('SceneImage', 'generate', { sceneId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

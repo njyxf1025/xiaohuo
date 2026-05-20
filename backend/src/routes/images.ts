@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, created, now, badRequest } from '../utils/response.js'
 import { generateImage } from '../services/image-generation.js'
+import { applyStyleToImagePrompt, getStyleNegativePrompt, getDramaStyle } from '../services/style-prompts.js'
 import { logTaskError, logTaskPayload, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
@@ -30,12 +31,16 @@ app.post('/', async (c) => {
       frameType: body.frame_type,
     })
     logTaskPayload('ImageAPI', 'request body', body)
+
+    const dramaStyle = getDramaStyle(body.drama_id)
+    const styledPrompt = applyStyleToImagePrompt(body.prompt, dramaStyle)
+
     const id = await generateImage({
       storyboardId: body.storyboard_id,
       dramaId: body.drama_id,
       sceneId: body.scene_id,
       characterId: body.character_id,
-      prompt: body.prompt,
+      prompt: styledPrompt,
       model: body.model,
       size: body.size,
       referenceImages: body.reference_images,

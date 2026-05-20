@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, created, badRequest } from '../utils/response.js'
 import { generateVideo } from '../services/video-generation.js'
+import { applyStyleToVideoPrompt, getDramaStyle } from '../services/style-prompts.js'
 import { logTaskError, logTaskPayload, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
@@ -29,10 +30,14 @@ app.post('/', async (c) => {
       duration: body.duration,
     })
     logTaskPayload('VideoAPI', 'request body', body)
+
+    const dramaStyle = getDramaStyle(body.drama_id)
+    const styledPrompt = applyStyleToVideoPrompt(body.prompt, dramaStyle)
+
     const id = await generateVideo({
       storyboardId: body.storyboard_id,
       dramaId: body.drama_id,
-      prompt: body.prompt,
+      prompt: styledPrompt,
       model: body.model,
       referenceMode: body.reference_mode,
       imageUrl: body.image_url,

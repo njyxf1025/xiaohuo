@@ -115,6 +115,10 @@
               <BaseSelect v-model="form.style" :options="styleSelectOptions" placeholder="选择风格" searchable />
             </label>
           </div>
+          <div v-if="form.style && form.style !== 'realistic'" class="style-preview">
+            <span class="style-preview-label">风格提示词将自动注入图片和视频生成</span>
+            <span class="style-preview-tag">{{ styleLabels[form.style] }}</span>
+          </div>
           <div class="modal-actions">
             <button type="button" class="btn" @click="showCreate = false">取消</button>
             <button type="submit" class="btn btn-primary">
@@ -141,7 +145,15 @@ const showCreate = ref(false)
 const form = ref({ title: '', total_episodes: 1, style: '' })
 const styles = ['realistic', 'anime', 'ghibli', 'cinematic', 'comic', 'watercolor']
 const styleLabels = { realistic: '写实', anime: '动漫', ghibli: '吉卜力', cinematic: '电影感', comic: '漫画', watercolor: '水彩' }
-const styleSelectOptions = computed(() => styles.map(s => ({ label: styleLabels[s] || s, value: s })))
+const styleDescs = {
+  realistic: '真实照片质感，自然光影',
+  anime: '日式动漫风格，鲜明色彩',
+  ghibli: '宫崎骏手绘水彩风格',
+  cinematic: '电影画面质感，戏剧性光影',
+  comic: '美漫风格，粗线条高对比',
+  watercolor: '水彩画风格，柔和渐变',
+}
+const styleSelectOptions = computed(() => styles.map(s => ({ label: `${styleLabels[s]} · ${styleDescs[s]}`, value: s })))
 
 async function load() {
   loading.value = true
@@ -384,5 +396,23 @@ onMounted(load)
 .field-label { font-size: 12px; font-weight: 600; color: var(--text-1); }
 .required { color: var(--error); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.style-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--accent-bg);
+  border: 1px solid rgba(184,120,20,0.12);
+  border-radius: var(--radius);
+}
+.style-preview-label { font-size: 12px; color: var(--text-2); }
+.style-preview-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 99px;
+}
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; }
 </style>
