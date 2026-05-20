@@ -12,7 +12,7 @@
         <div class="head-info">
           <h1 class="page-title">{{ drama.title }}</h1>
           <div class="page-meta">
-            <span v-if="drama.style" class="style-chip">{{ drama.style }}</span>
+            <span v-if="drama.style" class="style-chip">{{ styleLabels[drama.style] || drama.style }}</span>
             <span v-if="drama.style" class="meta-divider"></span>
             <span class="meta-item">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -32,6 +32,14 @@
         </svg>
         添加集
       </button>
+    </div>
+
+    <div v-if="drama.style && drama.style !== 'realistic'" class="style-banner">
+      <div class="style-banner-left">
+        <span class="style-banner-icon">🎨</span>
+        <span class="style-banner-text">当前风格：<strong>{{ styleLabels[drama.style] }}</strong> — 图片和视频生成将自动注入风格提示词</span>
+      </div>
+      <button class="btn btn-sm" @click="showStyleEdit = true">更换风格</button>
     </div>
 
     <!-- Episode List -->
