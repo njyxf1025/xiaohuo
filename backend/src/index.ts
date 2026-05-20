@@ -75,4 +75,12 @@ app.get('*', serveStatic({ root: distPath, path: 'index.html' }))
 
 const port = Number(process.env.PORT || 5679)
 console.log(`🚀 Huobao Drama TS server on http://localhost:${port}`)
-serve({ fetch: app.fetch, port })
+serve({
+  fetch: app.fetch,
+  port,
+  serverOptions: {
+    requestTimeout: 600_000,
+    headersTimeout: 600_000,
+    keepAliveTimeout: 30_000,
+  },
+})
