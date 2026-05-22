@@ -135,6 +135,7 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue'
 import { toast } from 'vue-sonner'
 import { dramaAPI } from '~/composables/useApi'
 import BaseSelect from '~/components/BaseSelect.vue'

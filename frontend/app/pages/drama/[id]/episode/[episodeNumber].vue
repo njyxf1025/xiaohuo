@@ -1482,6 +1482,7 @@
 </template>
 
 <script setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { toast } from 'vue-sonner'
 import {
   Users, MapPin, Video, ImageIcon, Layers, Mic2, FileText, FolderKanban, Clapperboard, Download, Loader2,

@@ -48,6 +48,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import brandLogo from '~/assets/huobao-logo.png'
 
 const route = useRoute()

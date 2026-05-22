@@ -181,6 +181,7 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue'
 import { toast } from 'vue-sonner'
 import { aiConfigAPI, dramaAPI, episodeAPI } from '~/composables/useApi'
 

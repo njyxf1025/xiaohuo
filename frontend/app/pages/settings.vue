@@ -316,6 +316,7 @@
 </template>
 
 <script setup>
+import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu } from 'lucide-vue-next'
 import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'
