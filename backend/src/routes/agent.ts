@@ -44,7 +44,13 @@ app.post('/:type/chat', async (c) => {
     return badRequest(c, 'drama_id and episode_id are required')
   }
 
-  const agent = createAgent(agentType, episode_id, drama_id)
+  let agent
+  try {
+    agent = createAgent(agentType, episode_id, drama_id)
+  } catch (err: any) {
+    logTaskError('Agent', agentType, { reason: err.message })
+    return badRequest(c, err.message)
+  }
   if (!agent) {
     logTaskError('Agent', agentType, { reason: 'agent not found' })
     return badRequest(c, 'Agent not found')
@@ -90,7 +96,13 @@ app.post('/:type/chat', async (c) => {
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(1)
     logTaskError('Agent', agentType, { elapsedSeconds: elapsed, error: err.message })
     console.error(err.stack || err)
-    return badRequest(c, err.message || 'Agent execution failed')
+    let msg = err.message || 'Agent execution failed'
+    if (msg.includes('missing session token') || msg.includes('Invalid API Key') || msg.includes('Incorrect API key')) {
+      msg = 'AI 服务认证失败，请检查设置中的 API Key 是否正确'
+    } else if (msg.includes('No active text AI config')) {
+      msg = '请先在设置中配置 AI 文本服务'
+    }
+    return badRequest(c, msg)
   }
 })
 

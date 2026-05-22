@@ -197,7 +197,12 @@ export function createAgent(type: string, episodeId: number, dramaId: number): A
   if (!defaults) return null
 
   const dbConfig = getAgentConfig(type)
-  const model = getModel(dbConfig)
+  let model
+  try {
+    model = getModel(dbConfig)
+  } catch (err: any) {
+    throw new Error('请先在设置中配置 AI 文本服务（API Key 和模型）')
+  }
   const baseInstructions = dbConfig?.systemPrompt?.trim() || defaults.instructions
   const skillInstructions = loadAgentSkills(type)
   const instructions = skillInstructions
