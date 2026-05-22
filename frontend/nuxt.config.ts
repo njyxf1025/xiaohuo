@@ -4,9 +4,41 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
-function createMinimalViteNodeServer(clientServer, nuxt) {
+function resolveClientEntry(config) {
+  const input = config.environments?.client?.build?.rollupOptions?.input ?? config.build?.rollupOptions?.input
+  if (input) {
+    if (typeof input === 'string') return input
+    if (!Array.isArray(input) && input.entry) return input.entry
+  }
+  return null
+}
+
+function buildManifest(clientServer) {
+  const config = clientServer.config
+  const clientEntry = resolveClientEntry(config)
+  const manifest = {
+    '@vite/client': {
+      file: '@vite/client',
+      css: [],
+      module: true,
+      isEntry: true,
+    },
+  }
+  if (clientEntry) {
+    manifest[clientEntry] = {
+      file: clientEntry,
+      isEntry: true,
+      module: true,
+      resourceType: 'script',
+    }
+  }
+  return manifest
+}
+
+function createMinimalViteNodeServer(clientServer) {
   const socketName = `nuxt-vite-node-${process.pid}-${Date.now()}`
   const socketPath = path.join(os.tmpdir(), `${socketName}.sock`)
+  let cachedManifest = null
 
   const server = net.createServer((socket) => {
     const INITIAL_BUFFER_SIZE = 64 * 1024
@@ -68,11 +100,14 @@ function createMinimalViteNodeServer(clientServer, nuxt) {
       try {
         switch (request.type) {
           case 'manifest': {
-            const manifestData = clientServer.config?.ssr?.manifest ?? {}
-            sendResponse(socket, request.id, manifestData)
+            if (!cachedManifest) {
+              cachedManifest = buildManifest(clientServer)
+            }
+            sendResponse(socket, request.id, cachedManifest)
             break
           }
           case 'invalidates': {
+            cachedManifest = null
             sendResponse(socket, request.id, [])
             break
           }
@@ -160,7 +195,7 @@ export default defineNuxtConfig({
   hooks: {
     'vite:serverCreated'(viteServer, { isServer }) {
       if (!isServer && !process.env.NUXT_VITE_NODE_OPTIONS) {
-        const { socketPath } = createMinimalViteNodeServer(viteServer, this)
+        const { socketPath } = createMinimalViteNodeServer(viteServer)
         process.env.NUXT_VITE_NODE_OPTIONS = JSON.stringify({
           socketPath,
           root: viteServer.config.root,
