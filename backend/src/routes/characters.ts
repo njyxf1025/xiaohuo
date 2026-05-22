@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, badRequest, notFound, now } from '../utils/response.js'
+import { success, created, badRequest, notFound, now } from '../utils/response.js'
+import { toSnakeCase } from '../utils/transform.js'
 import { generateVoiceSample } from '../services/tts-generation.js'
 import { generateImage } from '../services/image-generation.js'
 import { applyStyleToImagePrompt, getDramaStyle } from '../services/style-prompts.js'
@@ -23,6 +24,30 @@ function buildCharImagePrompt(char: any, style?: string | null): { prompt: strin
 }
 
 const app = new Hono()
+
+app.post('/', async (c) => {
+  const body = await c.req.json()
+  if (!body.drama_id) return badRequest(c, 'drama_id required')
+  if (!body.name) return badRequest(c, 'name required')
+  const ts = now()
+  const res = db.insert(schema.characters).values({
+    dramaId: body.drama_id,
+    name: body.name,
+    gender: body.gender,
+    role: body.role,
+    description: body.description,
+    appearance: body.appearance,
+    personality: body.personality,
+    voiceStyle: body.voice_style,
+    imageUrl: body.image_url,
+    sortOrder: body.sort_order,
+    createdAt: ts,
+    updatedAt: ts,
+  }).run()
+  const [result] = db.select().from(schema.characters)
+    .where(eq(schema.characters.id, Number(res.lastInsertRowid))).all()
+  return created(c, toSnakeCase(result))
+})
 
 // PUT /characters/:id
 app.put('/:id', async (c) => {

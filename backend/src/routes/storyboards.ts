@@ -76,7 +76,11 @@ app.post('/', async (c) => {
     characterIds: body.character_ids,
   })
   logTaskPayload('StoryboardAPI', 'create body', body)
-  validateStoryboardBindings(body.episode_id, body.scene_id, body.character_ids)
+  try {
+    validateStoryboardBindings(body.episode_id, body.scene_id, body.character_ids)
+  } catch (err: any) {
+    return badRequest(c, err.message)
+  }
   const res = db.insert(schema.storyboards).values({
     episodeId: body.episode_id,
     storyboardNumber: body.storyboard_number || 1,
@@ -137,11 +141,15 @@ app.put('/:id', async (c) => {
     updates.subtitleUrl = null
   }
 
-  validateStoryboardBindings(
-    storyboard.episodeId,
-    'scene_id' in body ? body.scene_id : storyboard.sceneId,
-    'character_ids' in body ? body.character_ids : getStoryboardCharacterIds(id),
-  )
+  try {
+    validateStoryboardBindings(
+      storyboard.episodeId,
+      'scene_id' in body ? body.scene_id : storyboard.sceneId,
+      'character_ids' in body ? body.character_ids : getStoryboardCharacterIds(id),
+    )
+  } catch (err: any) {
+    return badRequest(c, err.message)
+  }
 
   db.update(schema.storyboards).set(updates).where(eq(schema.storyboards.id, id)).run()
   if ('character_ids' in body) syncStoryboardCharacters(id, body.character_ids || [])

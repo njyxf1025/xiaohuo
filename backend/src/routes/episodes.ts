@@ -6,13 +6,19 @@ import { toSnakeCaseArray, toSnakeCase } from '../utils/transform.js'
 
 const app = new Hono()
 
+app.get('/', async (c) => {
+  const dramaId = c.req.query('drama_id') ? Number(c.req.query('drama_id')) : undefined
+  if (!dramaId) return badRequest(c, 'drama_id query parameter is required')
+  const rows = db.select().from(schema.episodes)
+    .where(eq(schema.episodes.dramaId, dramaId))
+    .orderBy(schema.episodes.episodeNumber).all()
+  return success(c, toSnakeCaseArray(rows))
+})
+
 // POST /episodes — Create a new episode
 app.post('/', async (c) => {
   const body = await c.req.json()
   if (!body.drama_id) return badRequest(c, 'drama_id required')
-  if (!body.image_config_id || !body.video_config_id || !body.audio_config_id) {
-    return badRequest(c, 'image_config_id, video_config_id and audio_config_id are required')
-  }
   const ts = now()
 
   // Get next episode number
