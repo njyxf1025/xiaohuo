@@ -1,0 +1,618 @@
+[
+  {
+    "id": "c77fd33f-3bdb-46c0-bc37-94f012c92216",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/c77fd33f-3bdb-46c0-bc37-94f012c92216/preview",
+    "file_path": "/workspace/data/avatars/c77fd33f-3bdb-46c0-bc37-94f012c92216.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "8b21ba3f-1f40-44aa-9b9e-6a28560bcccb",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/8b21ba3f-1f40-44aa-9b9e-6a28560bcccb/preview",
+    "file_path": "/workspace/data/avatars/8b21ba3f-1f40-44aa-9b9e-6a28560bcccb.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "53dbe558-842f-40de-9705-679335b0ebfc",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/53dbe558-842f-40de-9705-679335b0ebfc/preview",
+    "file_path": "/workspace/data/avatars/53dbe558-842f-40de-9705-679335b0ebfc.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "0352d3dd-164e-477a-ae7d-437db7c983d0",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/0352d3dd-164e-477a-ae7d-437db7c983d0/preview",
+    "file_path": "/workspace/data/avatars/0352d3dd-164e-477a-ae7d-437db7c983d0.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "3a353309-b293-4a19-83b9-5606445ef17b",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/3a353309-b293-4a19-83b9-5606445ef17b/preview",
+    "file_path": "/workspace/data/avatars/3a353309-b293-4a19-83b9-5606445ef17b.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "a09d1410-dca7-4a98-a941-72f5ee8791e1",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/a09d1410-dca7-4a98-a941-72f5ee8791e1/preview",
+    "file_path": "/workspace/data/avatars/a09d1410-dca7-4a98-a941-72f5ee8791e1.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "33c6c005-7271-4da3-826d-2895b9efb857",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/33c6c005-7271-4da3-826d-2895b9efb857/preview",
+    "file_path": "/workspace/data/avatars/33c6c005-7271-4da3-826d-2895b9efb857.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "ad96afd5-8795-4291-a979-1d2f7cd86b31",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/ad96afd5-8795-4291-a979-1d2f7cd86b31/preview",
+    "file_path": "/workspace/data/avatars/ad96afd5-8795-4291-a979-1d2f7cd86b31.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "977cd468-f096-4ee2-af5b-6a898ebb14e0",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/977cd468-f096-4ee2-af5b-6a898ebb14e0/preview",
+    "file_path": "/workspace/data/avatars/977cd468-f096-4ee2-af5b-6a898ebb14e0.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "2b5e7465-edc1-4e85-9053-d875306d7c8b",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/2b5e7465-edc1-4e85-9053-d875306d7c8b/preview",
+    "file_path": "/workspace/data/avatars/2b5e7465-edc1-4e85-9053-d875306d7c8b.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "b3fd54b1-9ccb-4d4f-8481-495ad97a9278",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/b3fd54b1-9ccb-4d4f-8481-495ad97a9278/preview",
+    "file_path": "/workspace/data/avatars/b3fd54b1-9ccb-4d4f-8481-495ad97a9278.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "7c4a74b9-b5a9-4f94-995c-aac56f3be692",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/7c4a74b9-b5a9-4f94-995c-aac56f3be692/preview",
+    "file_path": "/workspace/data/avatars/7c4a74b9-b5a9-4f94-995c-aac56f3be692.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "b6149b0d-3e97-4df3-a6f6-de0e53d05e8c",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/b6149b0d-3e97-4df3-a6f6-de0e53d05e8c/preview",
+    "file_path": "/workspace/data/avatars/b6149b0d-3e97-4df3-a6f6-de0e53d05e8c.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "2e15391a-7c0a-4020-88cb-0002a39f13ce",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/2e15391a-7c0a-4020-88cb-0002a39f13ce/preview",
+    "file_path": "/workspace/data/avatars/2e15391a-7c0a-4020-88cb-0002a39f13ce.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "06a479d6-efea-45bf-80ba-9fc51ad99dcf",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/06a479d6-efea-45bf-80ba-9fc51ad99dcf/preview",
+    "file_path": "/workspace/data/avatars/06a479d6-efea-45bf-80ba-9fc51ad99dcf.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "48608076-b421-4c4a-a76c-5f6a2ac354f0",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/48608076-b421-4c4a-a76c-5f6a2ac354f0/preview",
+    "file_path": "/workspace/data/avatars/48608076-b421-4c4a-a76c-5f6a2ac354f0.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "6a2a84e0-c5d2-4962-ab82-4b8447ef7067",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/6a2a84e0-c5d2-4962-ab82-4b8447ef7067/preview",
+    "file_path": "/workspace/data/avatars/6a2a84e0-c5d2-4962-ab82-4b8447ef7067.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "39b6a514-b182-4f12-a697-650f6c5051fe",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/39b6a514-b182-4f12-a697-650f6c5051fe/preview",
+    "file_path": "/workspace/data/avatars/39b6a514-b182-4f12-a697-650f6c5051fe.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "e7631f35-9121-4656-aa4f-9592cb61059b",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/e7631f35-9121-4656-aa4f-9592cb61059b/preview",
+    "file_path": "/workspace/data/avatars/e7631f35-9121-4656-aa4f-9592cb61059b.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "4c1bb2f1-7a3e-4687-ac4a-b376618042c5",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/4c1bb2f1-7a3e-4687-ac4a-b376618042c5/preview",
+    "file_path": "/workspace/data/avatars/4c1bb2f1-7a3e-4687-ac4a-b376618042c5.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "8e5a3b2d-7364-49f7-a1b4-0da1ac8da81a",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/8e5a3b2d-7364-49f7-a1b4-0da1ac8da81a/preview",
+    "file_path": "/workspace/data/avatars/8e5a3b2d-7364-49f7-a1b4-0da1ac8da81a.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "d593ac76-abc6-4076-83fd-62a27e3a0933",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/d593ac76-abc6-4076-83fd-62a27e3a0933/preview",
+    "file_path": "/workspace/data/avatars/d593ac76-abc6-4076-83fd-62a27e3a0933.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "b7ad8d74-7b12-4ba6-878b-79b1993de7f5",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/b7ad8d74-7b12-4ba6-878b-79b1993de7f5/preview",
+    "file_path": "/workspace/data/avatars/b7ad8d74-7b12-4ba6-878b-79b1993de7f5.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "651ace21-d74a-4858-9902-bcf84ebc7db8",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/651ace21-d74a-4858-9902-bcf84ebc7db8/preview",
+    "file_path": "/workspace/data/avatars/651ace21-d74a-4858-9902-bcf84ebc7db8.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "560f7c7e-30fe-4414-b46a-0e7626e6144f",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/560f7c7e-30fe-4414-b46a-0e7626e6144f/preview",
+    "file_path": "/workspace/data/avatars/560f7c7e-30fe-4414-b46a-0e7626e6144f.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "8114d393-cafb-4dfd-aca5-d672e0f535e0",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/8114d393-cafb-4dfd-aca5-d672e0f535e0/preview",
+    "file_path": "/workspace/data/avatars/8114d393-cafb-4dfd-aca5-d672e0f535e0.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "9a11ded0-ea97-4b50-b7f9-b93abc1c0127",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/9a11ded0-ea97-4b50-b7f9-b93abc1c0127/preview",
+    "file_path": "/workspace/data/avatars/9a11ded0-ea97-4b50-b7f9-b93abc1c0127.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  },
+  {
+    "id": "13f2db10-a4a7-42a3-9b20-8834fc4d24d1",
+    "name": "face.png",
+    "type": "image/png",
+    "source": "custom",
+    "preview_url": "/api/avatar/13f2db10-a4a7-42a3-9b20-8834fc4d24d1/preview",
+    "file_path": "/workspace/data/avatars/13f2db10-a4a7-42a3-9b20-8834fc4d24d1.png",
+    "face_detection": {
+      "face_detected": true,
+      "face_count": 1,
+      "face_locations": [
+        [
+          10,
+          80,
+          80,
+          10
+        ]
+      ],
+      "warning": null,
+      "error": null
+    }
+  }
+]

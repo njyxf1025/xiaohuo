@@ -1,0 +1,35 @@
+[project]
+name = "singing-digital-human"
+version = "0.1.0"
+description = "会唱歌的数字人 - 全栈Web应用"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "pychorus>=0.1.0",
+    "librosa>=0.10.0",
+    "opencv-python-headless>=4.9.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "face-recognition>=1.3.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "soundfile>=0.12.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
