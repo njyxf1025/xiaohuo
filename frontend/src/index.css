@@ -25,9 +25,19 @@ body {
   color: #e5e7eb;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
 }
 
 ::selection {
   background-color: rgba(139, 92, 246, 0.3);
   color: #fff;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+input, textarea, select {
+  font-size: 16px;
 }

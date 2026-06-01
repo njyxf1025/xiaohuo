@@ -135,7 +135,7 @@ export default function AudioWaveform({ fileId, filename, duration, onRegionConf
 
       <div className="bg-[#1a1d2e] rounded-xl p-4 border border-white/5">
         <p className="text-sm text-gray-400 mb-3">高潮区间（可拖拽波形上的紫色区域调整）</p>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2">
             <label className="text-xs text-gray-500">开始</label>
             <input
@@ -157,7 +157,7 @@ export default function AudioWaveform({ fileId, filename, duration, onRegionConf
             />
             <span className="text-xs text-gray-600">秒</span>
           </div>
-          <div className="ml-auto text-sm text-purple-400 font-medium">
+          <div className="w-full sm:w-auto sm:ml-auto text-sm text-purple-400 font-medium">
             时长 {(regionEnd - regionStart).toFixed(1)}s
           </div>
         </div>

@@ -87,7 +87,7 @@ export default function MusicUpload({ onComplete }: MusicUploadProps) {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={() => inputRef.current?.click()}
-        className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition-all duration-300 ${
+        className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-6 sm:p-12 text-center transition-all duration-300 ${
           isDragging
             ? 'border-purple-400 bg-purple-500/10 scale-[1.02]'
             : uploading
