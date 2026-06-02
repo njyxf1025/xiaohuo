@@ -1,0 +1,138 @@
+{
+  "results": [
+    [
+      "home page H1 contains '数字人'",
+      true,
+      "上传音乐，一键让数字人为你演唱高潮段落"
+    ],
+    [
+      "home shows 最大上传体积 label",
+      true,
+      ""
+    ],
+    [
+      "home shows 200 MB upload limit (handles 503 body)",
+      true,
+      "最大上传体积200 MB"
+    ],
+    [
+      "generate H1 is 创作中心",
+      true,
+      ""
+    ],
+    [
+      "MusicUploader shows '后端 200 MB 上限' label",
+      true,
+      ""
+    ],
+    [
+      "ModelInfoCard shows Wav2Lip column",
+      true,
+      ""
+    ],
+    [
+      "ModelInfoCard shows MuseTalk column",
+      true,
+      ""
+    ],
+    [
+      "file input exists",
+      true,
+      ""
+    ],
+    [
+      "history page loads",
+      true,
+      "历史记录"
+    ],
+    [
+      "no unexpected console errors",
+      true,
+      "0 errors: []"
+    ],
+    [
+      "no unexpected network failures",
+      true,
+      "0 errors: []"
+    ]
+  ],
+  "console": [
+    [
+      "debug",
+      "[vite] connecting..."
+    ],
+    [
+      "debug",
+      "[vite] connected."
+    ],
+    [
+      "info",
+      "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold"
+    ],
+    [
+      "warning",
+      "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+    ],
+    [
+      "warning",
+      "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+    ],
+    [
+      "error",
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ],
+    [
+      "error",
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ],
+    [
+      "debug",
+      "[vite] connecting..."
+    ],
+    [
+      "debug",
+      "[vite] connected."
+    ],
+    [
+      "info",
+      "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold"
+    ],
+    [
+      "warning",
+      "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+    ],
+    [
+      "warning",
+      "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+    ],
+    [
+      "error",
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ],
+    [
+      "error",
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ],
+    [
+      "debug",
+      "[vite] connecting..."
+    ],
+    [
+      "debug",
+      "[vite] connected."
+    ],
+    [
+      "info",
+      "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold"
+    ],
+    [
+      "warning",
+      "⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition."
+    ],
+    [
+      "warning",
+      "⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
+    ]
+  ],
+  "network_errors": []
+}
