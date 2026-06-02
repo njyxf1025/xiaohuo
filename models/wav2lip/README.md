@@ -6,6 +6,9 @@ constants in `core/wav2lip.py` will match these once the model wrapper is
 added in Task 5):
 
 - `wav2lip.onnx`            — main Wav2Lip generator (mel -> lip-synced face)
+- `wav2lip_hq.onnx`         — high-quality variant, accepted as an alias
+- `wav2lip_96.onnx`         — 96x96 resolution export alias
+- `wav2lip_gen.onnx`        — generator-only export alias
 - `face_detection.onnx`     — S3FD face detector (preferred; replaces s3fd.onnx)
 - `s3fd.onnx`               — alternative filename accepted for the face detector
 

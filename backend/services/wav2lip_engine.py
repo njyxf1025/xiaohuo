@@ -72,6 +72,40 @@ def _try_import_cv2():
         return None
 
 
+def _build_session_options(ort) -> object:
+    try:
+        session_options = ort.SessionOptions()
+        session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        return session_options
+    except Exception as exc:
+        _logger.warning(
+            "failed to build sequential SessionOptions, falling back to defaults: %s",
+            exc,
+            extra={"stage": "wav2lip.session_options"},
+        )
+        try:
+            return ort.SessionOptions()
+        except Exception as inner_exc:
+            _logger.warning(
+                "ort.SessionOptions() unavailable: %s", inner_exc,
+                extra={"stage": "wav2lip.session_options"},
+            )
+            return None
+
+
+def _create_inference_session(ort, model_path: str, providers: List[str], session_options):
+    try:
+        if session_options is not None:
+            return ort.InferenceSession(
+                model_path,
+                sess_options=session_options,
+                providers=providers,
+            )
+        return ort.InferenceSession(model_path, providers=providers)
+    except TypeError:
+        return ort.InferenceSession(model_path, providers=providers)
+
+
 class Wav2LipEngine:
     _instance: Optional["Wav2LipEngine"] = None
     _class_lock = threading.Lock()
@@ -138,10 +172,19 @@ class Wav2LipEngine:
             providers, label = onnx_provider.select_providers()
             self._providers = list(providers)
             self._provider_label = label
+            session_options = _build_session_options(ort)
+            if session_options is not None:
+                _logger.info(
+                    "Wav2Lip session configured with ORT_SEQUENTIAL execution mode (DirectML safe)",
+                    extra={
+                        "stage": "wav2lip.session_options",
+                        "providers": self._providers,
+                        "provider_label": self._provider_label,
+                    },
+                )
             try:
-                self._wav2lip_session = ort.InferenceSession(
-                    str(paths.wav2lip_path),
-                    providers=list(providers),
+                self._wav2lip_session = _create_inference_session(
+                    ort, str(paths.wav2lip_path), list(providers), session_options,
                 )
             except Exception as exc:
                 self._last_error = f"wav2lip session failed: {exc}"
@@ -149,9 +192,8 @@ class Wav2LipEngine:
                 self._wav2lip_session = None
                 return False
             try:
-                self._face_session = ort.InferenceSession(
-                    str(paths.face_detect_path),
-                    providers=list(providers),
+                self._face_session = _create_inference_session(
+                    ort, str(paths.face_detect_path), list(providers), session_options,
                 )
             except Exception as exc:
                 self._last_error = f"face session failed: {exc}"
@@ -206,7 +248,7 @@ class Wav2LipEngine:
         for d in candidates:
             if not d.exists():
                 continue
-            for name in ("wav2lip.onnx", "wav2lip_96.onnx", "wav2lip_gen.onnx"):
+            for name in ("wav2lip.onnx", "wav2lip_hq.onnx", "wav2lip_96.onnx", "wav2lip_gen.onnx"):
                 p = d / name
                 if p.exists():
                     wav2lip_path = p
