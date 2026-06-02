@@ -476,8 +476,11 @@ async def engines_status(request: Request) -> Any:
     }
     wav2lip_ok = bool(status.get("wav2lip", {}).get("directml_ready"))
     musetalk_ok = bool(status.get("musetalk", {}).get("directml_ready"))
-    if not wav2lip_ok and not musetalk_ok:
-        return JSONResponse(status_code=503, content=payload)
+    # /generation/engines/status is consumed by the front-end on every
+    # Generate page render. Return 200 with a `ready` flag so the UI can
+    # show engine status without triggering a red toast on every refresh.
+    payload["ready"] = wav2lip_ok or musetalk_ok
+    payload["degraded"] = not payload["ready"]
     return payload
 
 

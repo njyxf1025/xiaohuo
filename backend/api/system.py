@@ -52,6 +52,9 @@ async def health(request: Request) -> Any:
     payload = _build_payload(rid)
     dml_ok = payload["directml"]["available"]
     payload["status"] = "ok" if dml_ok else "unavailable"
+    # /health intentionally keeps the 503 contract so liveness probes can
+    # flag a missing DirectML runtime. Front-end code should not call
+    # /health on every page load — use /system/info instead.
     if not dml_ok:
         return JSONResponse(status_code=503, content=payload)
     return payload
@@ -59,10 +62,14 @@ async def health(request: Request) -> Any:
 
 @router.get("/system/info", tags=["system"])
 async def system_info(request: Request) -> Any:
+    # /system/info is consumed by the front-end on every page load to read
+    # upload limits / GPU info / engine availability. We must always return
+    # 200 so the UI can degrade gracefully when DirectML is missing;
+    # engine readiness is exposed in `payload["status"]` and
+    # `payload["directml"]["available"]`.
     rid = get_request_id()
     payload = _build_payload(rid)
     dml_ok = payload["directml"]["available"]
     payload["status"] = "ok" if dml_ok else "unavailable"
-    if not dml_ok:
-        return JSONResponse(status_code=503, content=payload)
+    payload["degraded"] = not dml_ok
     return payload

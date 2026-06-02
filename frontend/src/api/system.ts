@@ -58,12 +58,7 @@ export async function getSystemInfo(force = false): Promise<SystemInfo> {
     return cached.value;
   }
   try {
-    const { data } = await apiClient.get<SystemInfo>("/system/info", {
-      // /system/info returns 503 with a valid body when DirectML is unavailable
-      // (the strict-policy response). We want the body in that case so the UI
-      // can still surface upload limits / GPU info / etc.
-      validateStatus: (s) => (s >= 200 && s < 300) || s === 503,
-    });
+    const { data } = await apiClient.get<SystemInfo>("/system/info");
     const merged: SystemInfo = {
       ...DEFAULT_SYSTEM_INFO,
       ...data,

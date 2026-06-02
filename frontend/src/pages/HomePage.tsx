@@ -68,6 +68,8 @@ export default function HomePage() {
   const gpuDevices = info?.gpu?.devices ?? [];
   const providerLabel = info?.onnx_provider?.chosen ?? "unknown";
   const providers = info?.onnx_provider?.providers ?? [];
+  const dmlAvailable = info?.directml?.available ?? false;
+  const dmlReason = info?.directml?.reason ?? "unknown";
 
   return (
     <div className="space-y-16">
@@ -132,6 +134,23 @@ export default function HomePage() {
                   </p>
                 </div>
               </div>
+              {!dmlAvailable && !loading && (
+                <div
+                  className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <p className="font-semibold">DirectML 引擎未就绪</p>
+                  <p className="mt-1 text-amber-300/80">
+                    当前后端无法调用 GPU 推理（{dmlReason}）。音乐上传 / 形象选择 / 区间调整等
+                    UI 仍可使用；如需生成视频，请安装
+                    <code className="mx-1 rounded bg-amber-500/20 px-1 py-0.5 font-mono text-[10px]">
+                      onnxruntime-directml
+                    </code>
+                    并使用 Python 3.11/3.12。
+                  </p>
+                </div>
+              )}
               {loading ? (
                 <div className="flex items-center gap-2 text-sm text-slate-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
