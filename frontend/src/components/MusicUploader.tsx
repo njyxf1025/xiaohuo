@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { Loader2, Music, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
 import { getWaveform, uploadMusic } from "../api/music";
+import { getSystemInfo } from "../api/system";
 import { useStore } from "../store/useStore";
 import { cn, formatBytes } from "../lib/utils";
 
@@ -17,18 +18,54 @@ const ACCEPTED = {
   "audio/x-flac": [".flac"],
 };
 
+const FALLBACK_MAX_UPLOAD_MB = 200;
+const FALLBACK_MAX_UPLOAD_BYTES = FALLBACK_MAX_UPLOAD_MB * 1024 * 1024;
+
 interface MusicUploaderProps {
   onUploaded?: (musicId: string) => void;
 }
 
 export default function MusicUploader({ onUploaded }: MusicUploaderProps) {
   const [busy, setBusy] = useState(false);
+  const [maxBytes, setMaxBytes] = useState<number>(FALLBACK_MAX_UPLOAD_BYTES);
+  const [maxMb, setMaxMb] = useState<number>(FALLBACK_MAX_UPLOAD_MB);
+  const [limitReady, setLimitReady] = useState(false);
   const setCurrentMusic = useStore((s) => s.setCurrentMusic);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const info = await getSystemInfo();
+        if (cancelled) return;
+        const mb = Number(info.max_upload_mb) || FALLBACK_MAX_UPLOAD_MB;
+        const bytes =
+          Number(info.max_upload_bytes) || mb * 1024 * 1024;
+        if (mb > 0) {
+          setMaxMb(mb);
+          setMaxBytes(bytes);
+        }
+      } catch (e) {
+        console.warn("failed to fetch system upload limit, using fallback", e);
+      } finally {
+        if (!cancelled) setLimitReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onDrop = useCallback(
     async (files: File[]) => {
       const file = files[0];
       if (!file) return;
+      if (file.size > maxBytes) {
+        toast.error(
+          `文件过大：${formatBytes(file.size)}，当前后端允许的最大上传体积为 ${formatBytes(maxBytes)}`,
+        );
+        return;
+      }
       setBusy(true);
       try {
         const meta = await uploadMusic(file);
@@ -56,7 +93,7 @@ export default function MusicUploader({ onUploaded }: MusicUploaderProps) {
         setBusy(false);
       }
     },
-    [setCurrentMusic, onUploaded],
+    [maxBytes, setCurrentMusic, onUploaded],
   );
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } =
@@ -64,8 +101,13 @@ export default function MusicUploader({ onUploaded }: MusicUploaderProps) {
       onDrop,
       accept: ACCEPTED,
       maxFiles: 1,
+      maxSize: maxBytes,
       disabled: busy,
     });
+
+  const limitLabel = limitReady
+    ? `最大 ${formatBytes(maxBytes)}（后端 ${maxMb} MB 上限）`
+    : `最大 ${formatBytes(FALLBACK_MAX_UPLOAD_BYTES)}`;
 
   return (
     <div
@@ -98,8 +140,8 @@ export default function MusicUploader({ onUploaded }: MusicUploaderProps) {
         </p>
       </div>
       <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-        <Music className="h-3.5 w-3.5" />
-        最大 {formatBytes(50 * 1024 * 1024)}
+        <Music aria-hidden="true" className="h-3.5 w-3.5" />
+        {limitLabel}
       </div>
     </div>
   );

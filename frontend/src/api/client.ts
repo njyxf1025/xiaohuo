@@ -19,6 +19,8 @@ function generateRequestId(): string {
 export const apiClient: AxiosInstance = axios.create({
   baseURL: NORMALIZED_BASE,
   timeout: 120_000,
+  maxContentLength: 500 * 1024 * 1024,
+  maxBodyLength: 500 * 1024 * 1024,
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",

@@ -38,6 +38,9 @@ def test_health_endpoint() -> None:
     assert "providers" in body.get("onnx_provider", {})
     directml = body.get("directml", {})
     assert directml.get("cpu_fallback_enabled") is False
+    assert isinstance(body.get("max_upload_mb"), int)
+    assert body["max_upload_mb"] >= 50
+    assert body.get("max_upload_bytes") == body["max_upload_mb"] * 1024 * 1024
     if _is_dml_unavailable(body):
         assert response.status_code == 503
         assert body.get("status") == "unavailable"
@@ -56,6 +59,7 @@ def test_system_info_endpoint() -> None:
     assert "providers" in body.get("onnx_provider", {})
     directml = body.get("directml", {})
     assert directml.get("cpu_fallback_enabled") is False
+    assert isinstance(body.get("max_upload_mb"), int)
     if _is_dml_unavailable(body):
         assert response.status_code == 503
     else:

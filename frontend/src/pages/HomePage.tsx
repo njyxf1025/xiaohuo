@@ -12,7 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { getSystemInfo, type SystemInfoResponse } from "../api/system";
+import { getSystemInfo, type SystemInfo, type GpuDevice } from "../api/system";
 import { cn } from "../lib/utils";
 
 const STEPS = [
@@ -46,7 +46,7 @@ const FEATURES = [
 ];
 
 export default function HomePage() {
-  const [info, setInfo] = useState<SystemInfoResponse | null>(null);
+  const [info, setInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -152,13 +152,23 @@ export default function HomePage() {
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">
+                      最大上传体积
+                    </p>
+                    <p className="mt-1 font-mono text-brand-200">
+                      {info?.max_upload_mb
+                        ? `${info.max_upload_mb} MB`
+                        : "未知"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
                       GPU 设备
                     </p>
                     {gpuDevices.length === 0 ? (
                       <p className="mt-1 text-slate-400">未检测到 GPU，将使用 CPU 推理</p>
                     ) : (
                       <ul className="mt-1 space-y-1 text-slate-300">
-                        {gpuDevices.slice(0, 4).map((g, i) => (
+                        {gpuDevices.slice(0, 4).map((g: GpuDevice, i: number) => (
                           <li
                             key={i}
                             className="rounded-md bg-slate-950/60 px-2 py-1 text-xs"
