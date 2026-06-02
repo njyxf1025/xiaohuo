@@ -144,6 +144,7 @@ export default function ModelSelector({ value, onChange, disabled }: ModelSelect
             >
               <div className="flex items-start gap-3">
                 <div
+                  aria-hidden="true"
                   className={cn(
                     "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
                     isSelected
@@ -165,7 +166,7 @@ export default function ModelSelector({ value, onChange, disabled }: ModelSelect
                       {m.badge.label}
                     </span>
                     {isSelected && (
-                      <CheckCircle2 className="h-4 w-4 text-brand-300" />
+                      <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-brand-300" />
                     )}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">{m.subtitle}</div>
@@ -185,11 +186,11 @@ export default function ModelSelector({ value, onChange, disabled }: ModelSelect
 
               <div className="space-y-2">
                 {m.highlights.map(({ icon: HIcon, title, desc }) => (
-                  <div
-                    key={title}
-                    className="flex items-start gap-2 rounded-lg border border-slate-800/80 bg-slate-950/30 p-2"
-                  >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand-500/15 text-brand-300">
+                  <div key={title} className="flex items-start gap-2 rounded-lg border border-slate-800/80 bg-slate-950/30 p-2">
+                    <span
+                      aria-hidden="true"
+                      className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand-500/15 text-brand-300"
+                    >
                       <HIcon className="h-3 w-3" />
                     </span>
                     <div className="min-w-0">
@@ -222,9 +223,12 @@ export default function ModelSelector({ value, onChange, disabled }: ModelSelect
               </div>
 
               {blocked && (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-200/90">
+                <div
+                  role="status"
+                  className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-200/90"
+                >
                   <div className="mb-1 flex items-center gap-1 font-semibold">
-                    <AlertTriangle className="h-3 w-3" />
+                    <AlertTriangle aria-hidden="true" className="h-3 w-3" />
                     torch-directml 未就绪
                   </div>
                   当前主机仅启用了 onnxruntime-directml 路径；MuseTalk 在

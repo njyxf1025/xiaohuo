@@ -236,18 +236,28 @@ export default function WaveformPlayer({
           />
           <button
             type="button"
-            aria-label="start handle"
+            aria-label="调整高潮区间起始时间"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(safeDuration)}
+            aria-valuenow={Math.round(range.start)}
+            aria-valuetext={formatTime(range.start)}
+            role="slider"
             onPointerDown={onPointerDown("start")}
-            className="absolute top-0 z-10 flex h-full w-4 -translate-x-1/2 cursor-ew-resize items-center justify-center"
+            className="absolute top-0 z-10 flex h-full w-4 -translate-x-1/2 cursor-ew-resize touch-none items-center justify-center"
             style={{ left: `${startPct}%` }}
           >
             <span className="h-7 w-1.5 rounded-full bg-brand-300 shadow-glow" />
           </button>
           <button
             type="button"
-            aria-label="end handle"
+            aria-label="调整高潮区间结束时间"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(safeDuration)}
+            aria-valuenow={Math.round(range.end)}
+            aria-valuetext={formatTime(range.end)}
+            role="slider"
             onPointerDown={onPointerDown("end")}
-            className="absolute top-0 z-10 flex h-full w-4 -translate-x-1/2 cursor-ew-resize items-center justify-center"
+            className="absolute top-0 z-10 flex h-full w-4 -translate-x-1/2 cursor-ew-resize touch-none items-center justify-center"
             style={{ left: `${endPct}%` }}
           >
             <span className="h-7 w-1.5 rounded-full bg-brand-300 shadow-glow" />

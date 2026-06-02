@@ -75,7 +75,7 @@ export default function ModelInfoCard() {
 
       <div className="lg:col-span-2 rounded-2xl border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-200/90">
         <div className="mb-1 flex items-center gap-1.5 font-semibold">
-          <AlertTriangle className="h-3.5 w-3.5" />
+          <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />
           部署前置条件
         </div>
         两条推理路径都要求 DirectML 兼容 GPU（AMD 6700XT / NVIDIA / Intel Arc）。
@@ -113,6 +113,7 @@ function ModelColumn({
       <div className="relative space-y-5">
         <div className="flex items-center gap-3">
           <div
+            aria-hidden="true"
             className={
               "flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-glow " +
               (isBrand
@@ -143,7 +144,7 @@ function ModelColumn({
             <div
               key={title}
               className={
-                "rounded-xl border bg-slate-900/40 p-4 transition " +
+                "rounded-xl border bg-slate-900/40 p-4 transition motion-reduce:transition-none " +
                 (isBrand
                   ? "border-slate-800 hover:border-brand-500/40"
                   : "border-slate-800 hover:border-amber-500/40")
@@ -151,6 +152,7 @@ function ModelColumn({
             >
               <div className="mb-2 flex items-center gap-2">
                 <span
+                  aria-hidden="true"
                   className={
                     "flex h-7 w-7 items-center justify-center rounded-lg " +
                     (isBrand

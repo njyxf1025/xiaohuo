@@ -71,7 +71,7 @@ export default function MusicUploader({ onUploaded }: MusicUploaderProps) {
     <div
       {...getRootProps()}
       className={cn(
-        "group relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/40 px-6 py-12 text-center transition-all",
+        "group relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/40 px-6 py-12 text-center motion-reduce:transition-none",
         isDragActive && "border-brand-400 bg-brand-500/10 shadow-glow",
         isDragReject && "border-rose-500/60 bg-rose-500/10",
         busy && "pointer-events-none opacity-70",

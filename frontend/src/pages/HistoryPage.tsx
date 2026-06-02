@@ -113,9 +113,10 @@ export default function HistoryPage() {
                   {ready ? (
                     <img
                       src={getTaskThumbUrl(t.task_id)}
-                      alt="thumbnail"
+                      alt={`任务 ${t.task_id} 的生成结果缩略图`}
                       className="h-full w-full object-cover"
                       loading="lazy"
+                      decoding="async"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).style.opacity =
                           "0.15";

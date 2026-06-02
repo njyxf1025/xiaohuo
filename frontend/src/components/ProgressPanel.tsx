@@ -152,8 +152,13 @@ export default function ProgressPanel({
 
       <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800">
         <div
+          role="progressbar"
+          aria-label="生成进度"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(percent)}
           className={cn(
-            "h-full rounded-full transition-all duration-500",
+            "h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none",
             isFailed
               ? "bg-rose-500"
               : "bg-gradient-to-r from-brand-500 to-brand-300",
@@ -195,13 +200,13 @@ export default function ProgressPanel({
       </ol>
 
       {status?.message && (
-        <p className="text-xs text-slate-400">
+        <p aria-live="polite" className="text-xs text-slate-400">
           <span className="text-slate-500">后端消息：</span>
           {status.message}
         </p>
       )}
       {error && (
-        <p className="text-xs text-rose-300">
+        <p aria-live="assertive" className="text-xs text-rose-300">
           <span className="text-rose-400">错误：</span>
           {error}
         </p>
