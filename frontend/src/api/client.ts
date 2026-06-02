@@ -57,7 +57,9 @@ apiClient.interceptors.response.use(
         ? "网关响应超时（文件可能较大或后端处理较慢），请稍后重试"
         : status === 502
           ? "网关无响应，请检查后端服务是否运行"
-          : `服务器错误 (${status}): ${message}`;
+          : status === 503
+            ? "后端服务暂不可用（DirectML 引擎未就绪），请稍后重试"
+            : `服务器错误 (${status}): ${message}`;
       toast.error(friendly);
     } else if (status === 413) {
       toast.error(`文件过大: ${message}`);

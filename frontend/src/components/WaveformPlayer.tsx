@@ -33,6 +33,7 @@ export default function WaveformPlayer({
   const [ready, setReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
+  const [audioAvailable, setAudioAvailable] = useState<boolean | null>(null);
 
   const fallbackDuration =
     duration > 0
@@ -66,6 +67,22 @@ export default function WaveformPlayer({
   useEffect(() => {
     if (!containerRef.current) return;
     const audioUrl = getMusicDownloadUrl(musicId);
+    let cancelled = false;
+
+    const fallbackToPeaks = (reason: unknown) => {
+      if (cancelled) return;
+      console.warn("WaveformPlayer: audio fetch failed, using peaks-only mode.", reason);
+      setAudioAvailable(false);
+      try {
+        if (peaks && peaks.length > 0 && safeDuration > 0) {
+          const channelPeaks: number[][] = [peaks];
+          ws.load("", channelPeaks, safeDuration);
+        }
+      } catch (e) {
+        console.warn("fallback peaks load failed", e);
+      }
+    };
+
     const ws = WaveSurfer.create({
       container: containerRef.current,
       height,
@@ -83,6 +100,24 @@ export default function WaveformPlayer({
     });
     wsRef.current = ws;
 
+    // Proactive probe: if the audio URL is unreachable, switch to peaks-only
+    // before wavesurfer hits ERR_ABORTED. The /music/{id}/download endpoint
+    // returns 404 for missing/expired music, or 503 via a misbehaving proxy
+    // (e.g. the trae preview sandbox); either way we want a clean fallback.
+    void (async () => {
+      try {
+        const r = await fetch(audioUrl, { method: "HEAD" });
+        if (cancelled) return;
+        if (!r.ok) {
+          fallbackToPeaks(`audio url HEAD returned ${r.status}`);
+        } else {
+          setAudioAvailable(true);
+        }
+      } catch (e) {
+        if (!cancelled) fallbackToPeaks(e);
+      }
+    })();
+
     const onReady = () => {
       const realDur = ws.getDuration();
       if (realDur > 0 && Math.abs(realDur - safeDuration) > 0.5) {
@@ -98,15 +133,7 @@ export default function WaveformPlayer({
     const onFinish = () => setIsPlaying(false);
     const onTime = (t: number) => setPosition(t);
     const onError = (err: unknown) => {
-      console.warn("WaveSurfer audio load failed; falling back to peaks-only mode", err);
-      if (peaks && peaks.length > 0 && safeDuration > 0) {
-        try {
-          const channelPeaks: number[][] = [peaks];
-          ws.load("", channelPeaks, safeDuration);
-        } catch (e) {
-          console.warn("fallback peaks load failed", e);
-        }
-      }
+      fallbackToPeaks(err);
     };
 
     ws.on("ready", onReady);
@@ -117,6 +144,7 @@ export default function WaveformPlayer({
     ws.on("error", onError);
 
     return () => {
+      cancelled = true;
       try {
         ws.destroy();
       } catch {
@@ -148,6 +176,7 @@ export default function WaveformPlayer({
   const playSegment = () => {
     const ws = wsRef.current;
     if (!ws) return;
+    if (audioAvailable === false) return;
     try {
       ws.setTime(range.start);
       ws.play();
@@ -159,6 +188,7 @@ export default function WaveformPlayer({
   const togglePlay = () => {
     const ws = wsRef.current;
     if (!ws) return;
+    if (audioAvailable === false) return;
     if (isPlaying) ws.pause();
     else ws.play();
   };
@@ -167,7 +197,7 @@ export default function WaveformPlayer({
     setRange(initial);
   };
 
-  const audioReady = ready && safeDuration > 0;
+  const audioReady = ready && (audioAvailable === false || safeDuration > 0);
 
   const startPct = safeDuration > 0 ? (range.start / safeDuration) * 100 : 0;
   const endPct = safeDuration > 0 ? (range.end / safeDuration) * 100 : 100;
@@ -291,9 +321,17 @@ export default function WaveformPlayer({
           type="button"
           onClick={togglePlay}
           className="btn-primary"
-          disabled={!audioReady}
+          disabled={!audioReady || audioAvailable === false}
           aria-label={isPlaying ? "暂停试听" : "试听整段"}
-          title={audioReady ? (isPlaying ? "暂停试听" : "试听整段") : "音频加载中…"}
+          title={
+            audioAvailable === false
+              ? "当前为波形预览模式，音频不可用"
+              : audioReady
+                ? isPlaying
+                  ? "暂停试听"
+                  : "试听整段"
+                : "音频加载中…"
+          }
         >
           {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           {isPlaying ? "暂停" : "试听整段"}
@@ -302,9 +340,15 @@ export default function WaveformPlayer({
           type="button"
           onClick={playSegment}
           className="btn-ghost"
-          disabled={!audioReady}
+          disabled={!audioReady || audioAvailable === false}
           aria-label="试听所选区间"
-          title={audioReady ? "试听所选区间" : "音频加载中…"}
+          title={
+            audioAvailable === false
+              ? "当前为波形预览模式，音频不可用"
+              : audioReady
+                ? "试听所选区间"
+                : "音频加载中…"
+          }
         >
           <Scissors className="h-4 w-4" />
           试听所选区间
@@ -319,6 +363,15 @@ export default function WaveformPlayer({
           <RotateCcw className="h-4 w-4" />
           重置为自动检测
         </button>
+        {audioAvailable === false && (
+          <span
+            className="ml-2 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300 ring-1 ring-amber-500/30"
+            role="status"
+            aria-live="polite"
+          >
+            音频源不可用，仅显示波形；区间可拖动
+          </span>
+        )}
       </div>
     </div>
   );
