@@ -8,6 +8,12 @@ from typing import Callable, List, Optional, Sequence
 import numpy as np
 
 from core.logging import get_logger
+from services.vocal_separation import (
+    VocalSeparationDirectMLNotAvailable,
+    VocalSeparationError,
+    VocalSeparationModelNotLoaded,
+    get_vocal_separator,
+)
 from services.wav2lip_engine import (
     DEFAULT_FPS,
     DEFAULT_RESIZE_FACTOR,
@@ -41,6 +47,7 @@ class PipelineRequest:
     resize_factor: float = DEFAULT_RESIZE_FACTOR
     progress_cb: Optional[ProgressCallback] = None
     preserve_audio: bool = True
+    enable_vocal_separation: bool = True
 
     def duration_sec(self) -> float:
         s = float(self.slice_start)
@@ -59,6 +66,9 @@ class PipelineResult:
     height: int
     mel_shape: tuple
     muxed: bool
+    vocal_separation_applied: bool
+    vocals_path: Optional[Path] = None
+    accompaniment_path: Optional[Path] = None
 
 
 def _try_import_cv2():
@@ -231,19 +241,78 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
     if sliced.size == 0:
         raise ValueError("audio slice is empty (invalid range)")
 
+    vocals_path: Optional[Path] = None
+    accompaniment_path: Optional[Path] = None
+    vocal_separation_applied = False
+    audio_for_mel: np.ndarray = sliced
+    audio_for_mux: np.ndarray = sliced
+    if req.enable_vocal_separation:
+        separator = get_vocal_separator()
+        if req.progress_cb is not None:
+            req.progress_cb(
+                "vocal_separation", 2.0,
+                "separating vocals from accompaniment (DirectML)",
+            )
+        try:
+            sep_dir = output_path.parent / "_vocal_separation"
+            try:
+                vocals_audio_path, acc_audio_path = separator.separate(
+                    str(audio_path), str(sep_dir), progress_cb=req.progress_cb,
+                )
+            except VocalSeparationDirectMLNotAvailable as exc:
+                raise
+            except VocalSeparationModelNotLoaded as exc:
+                _logger.warning(
+                    "vocal_separation model not loaded (%s); using original audio as vocals, "
+                    "no accompaniment to re-mix (lipsync may jitter on heavy bass)",
+                    exc,
+                    extra={"stage": "wav2lip.vocal_separation_fallback"},
+                )
+            except VocalSeparationError as exc:
+                _logger.warning(
+                    "vocal_separation failed (%s); falling back to original audio",
+                    exc,
+                    extra={"stage": "wav2lip.vocal_separation_fallback"},
+                )
+            else:
+                vocals_path = Path(vocals_audio_path)
+                accompaniment_path = Path(acc_audio_path) if acc_audio_path else None
+                v_samples, v_sr = _load_audio_mono(vocals_path, target_sr=MEL_SAMPLE_RATE)
+                v_sliced = _slice_audio(
+                    v_samples, v_sr, float(req.slice_start), float(req.slice_end)
+                )
+                if v_sliced.size > 0:
+                    audio_for_mel = v_sliced
+                    audio_for_mux = v_sliced
+                    vocal_separation_applied = True
+                    _logger.info(
+                        "vocal_separation applied; Wav2Lip will use vocals track, "
+                        "final video will re-mix accompaniment",
+                        extra={
+                            "stage": "wav2lip.vocal_separation_applied",
+                            "vocals_path": str(vocals_path),
+                            "accompaniment_path": (
+                                str(accompaniment_path) if accompaniment_path else None
+                            ),
+                        },
+                    )
+                else:
+                    _logger.warning(
+                        "vocal_separation produced empty vocals slice; "
+                        "falling back to original audio"
+                    )
+        except VocalSeparationDirectMLNotAvailable:
+            raise
+
     if req.progress_cb is not None:
-        req.progress_cb("mel_compute", 3.0, f"mel on {sliced.shape[-1]} samples")
-    mel = compute_mel(sliced, sample_rate=sr)
+        req.progress_cb("mel_compute", 4.0, f"mel on {audio_for_mel.shape[-1]} samples")
+    mel = compute_mel(audio_for_mel, sample_rate=sr)
     if mel.ndim != 2 or mel.size == 0:
         raise Wav2LipEngineError("mel-spectrogram produced empty result")
 
-    duration_sec = float(sliced.shape[-1]) / float(sr) if sr > 0 else 0.0
+    duration_sec = float(audio_for_mel.shape[-1]) / float(sr) if sr > 0 else 0.0
     fps = max(1, int(req.fps or DEFAULT_FPS))
     n_video_frames = max(1, int(round(duration_sec * float(fps))))
-    if req.preserve_audio:
-        sliced_full = sliced
-    else:
-        sliced_full = sliced
 
     if req.progress_cb is not None:
         req.progress_cb("load_avatar", 5.0, f"loading {avatar_path.name} ({req.avatar_kind})")
@@ -309,12 +378,36 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
         _logger.warning("thumbnail generation failed: %s", exc)
 
     muxed = False
-    if req.preserve_audio and audio_path.exists() and sliced_full is not None and sliced_full.size > 0:
+    mux_audio: Optional[np.ndarray] = None
+    mux_sr: int = sr
+    if vocal_separation_applied and accompaniment_path is not None:
+        try:
+            acc_samples, acc_sr = _load_audio_mono(
+                accompaniment_path, target_sr=MEL_SAMPLE_RATE
+            )
+            acc_sliced = _slice_audio(
+                acc_samples, acc_sr, float(req.slice_start), float(req.slice_end)
+            )
+            if acc_sliced.size > 0:
+                mux_audio = acc_sliced
+                mux_sr = acc_sr
+                _logger.info(
+                    "using separated accompaniment for final remux "
+                    "(vocals drive lipsync, user hears full song minus vocals)",
+                    extra={"stage": "wav2lip.mux_accompaniment"},
+                )
+        except Exception as exc:
+            _logger.warning("accompaniment load failed, falling back to vocals for mux: %s", exc)
+    if mux_audio is None and req.preserve_audio:
+        mux_audio = audio_for_mux
+        mux_sr = sr
+
+    if mux_audio is not None and mux_audio.size > 0:
         tmp_audio = output_path.with_suffix(".tmp.wav")
         try:
             sf = _try_import_sf()
             if sf is not None:
-                sf.write(str(tmp_audio), sliced_full, sr, subtype="PCM_16")
+                sf.write(str(tmp_audio), mux_audio, mux_sr, subtype="PCM_16")
                 if probe_ffmpeg():
                     muxed = mux_audio_video(output_path, tmp_audio, output_path)
                 else:
@@ -345,6 +438,7 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
             "width": w,
             "height": h,
             "muxed": muxed,
+            "vocal_separation_applied": vocal_separation_applied,
             "output": str(output_path),
         },
     )
@@ -358,4 +452,7 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
         height=h,
         mel_shape=(int(mel.shape[0]), int(mel.shape[-1])),
         muxed=muxed,
+        vocal_separation_applied=vocal_separation_applied,
+        vocals_path=vocals_path,
+        accompaniment_path=accompaniment_path,
     )

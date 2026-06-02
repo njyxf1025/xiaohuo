@@ -19,6 +19,8 @@ export interface GenerationRequest {
   preset_id?: string;
   fps?: number;
   resize_factor?: number;
+  enable_vocal_separation?: boolean;
+  enable_denoising?: boolean;
 }
 
 export interface GenerationResponse {
@@ -49,13 +51,26 @@ export interface TaskListResponse {
   limit: number;
 }
 
+export interface VocalSeparationStatus {
+  loaded: boolean;
+  model_present: boolean;
+  model_path: string | null;
+  providers: string[];
+  provider_label?: string;
+  last_error?: string | null;
+}
+
 export interface EngineStatus {
   loaded: boolean;
+  directml_available?: boolean;
+  directml_reason?: string;
+  cpu_fallback_enabled?: boolean;
   providers: string[];
   provider_label: string;
   wav2lip_path: string | null;
   face_detect_path: string | null;
   last_error: string | null;
+  vocal_separation?: VocalSeparationStatus;
   request_id?: string;
   timestamp: number;
 }
@@ -90,6 +105,13 @@ export async function getEngineStatus(): Promise<EngineStatus> {
 
 export async function warmupEngine(): Promise<EngineStatus> {
   const { data } = await apiClient.post<EngineStatus>("/generation/engine/warmup");
+  return data;
+}
+
+export async function warmupVocalSeparation(): Promise<EngineStatus> {
+  const { data } = await apiClient.post<EngineStatus>(
+    "/generation/vocal_separation/warmup",
+  );
   return data;
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Sparkles, Wand2 } from "lucide-react";
+import { AudioLines, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import AvatarSelector from "../components/AvatarSelector";
@@ -33,6 +33,10 @@ export default function GeneratePage() {
   const avatar = useStore((s) => s.selectedAvatar);
   const currentTask = useStore((s) => s.currentTask);
   const setCurrentTask = useStore((s) => s.setCurrentTask);
+  const enableVocalSeparation = useStore((s) => s.enableVocalSeparation);
+  const setEnableVocalSeparation = useStore((s) => s.setEnableVocalSeparation);
+  const enableDenoising = useStore((s) => s.enableDenoising);
+  const setEnableDenoising = useStore((s) => s.setEnableDenoising);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [slicing, setSlicing] = useState(false);
@@ -102,6 +106,8 @@ export default function GeneratePage() {
         fps: 25,
         resize_factor: 1,
         slice_id: slice.sliceId,
+        enable_vocal_separation: enableVocalSeparation,
+        enable_denoising: enableDenoising,
       };
       if (avatar.kind === "preset") {
         payload.preset_id = avatar.id;
@@ -248,35 +254,91 @@ export default function GeneratePage() {
             desc="基于 Wav2Lip-ONNX + DirectML 进行唇形推理。"
           />
           <div className="space-y-4">
-            <div className="card flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-              <div className="text-sm text-slate-300">
-                {avatar ? (
-                  <>
-                    已选形象：
-                    <span className="font-semibold text-white">
-                      {avatar.name}
-                    </span>
-                    <span className="ml-2 text-xs text-slate-500">
-                      ({avatar.kind === "preset" ? "预设" : avatar.kind})
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-slate-500">请先选择一个数字人形象</span>
-                )}
+            <div className="card space-y-4">
+              <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                <div className="text-sm text-slate-300">
+                  {avatar ? (
+                    <>
+                      已选形象：
+                      <span className="font-semibold text-white">
+                        {avatar.name}
+                      </span>
+                      <span className="ml-2 text-xs text-slate-500">
+                        ({avatar.kind === "preset" ? "预设" : avatar.kind})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-slate-500">请先选择一个数字人形象</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={!canGenerate || starting}
+                  onClick={onGenerate}
+                  className={cn("btn-primary", "px-6 py-3 text-base")}
+                >
+                  {starting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  生成视频
+                </button>
               </div>
-              <button
-                type="button"
-                disabled={!canGenerate || starting}
-                onClick={onGenerate}
-                className={cn("btn-primary", "px-6 py-3 text-base")}
-              >
-                {starting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                生成视频
-              </button>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <AudioLines className="h-4 w-4 text-brand-300" />
+                  音频预处理选项
+                </div>
+                <div className="space-y-3">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-brand-500 focus:ring-brand-500"
+                      checked={enableVocalSeparation}
+                      onChange={(e) => setEnableVocalSeparation(e.target.checked)}
+                      disabled={phase === "generating" || phase === "done"}
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-slate-100">
+                        启用人声分离（ONNX + DirectML）
+                        <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-500/30">
+                          推荐
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs leading-relaxed text-slate-400">
+                        上传带重低音伴奏的歌曲时，开启后先用 ONNX
+                        人声分离模型把纯人声送进 Wav2Lip，唇形不再因伴奏震动而
+                        抖动；最终视频再把人声与伴奏缝合，听感保持完整。
+                        若未安装分离模型，会自动回退到原始音频。
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex cursor-not-allowed items-start gap-3 opacity-60">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-800 text-brand-500 focus:ring-brand-500"
+                      checked={enableDenoising}
+                      onChange={(e) => setEnableDenoising(e.target.checked)}
+                      disabled
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-slate-100">
+                        启用音频降噪（resemble-denoiser）
+                        <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                          预留
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs leading-relaxed text-slate-500">
+                        模型架构已留好接口，等待 resemble-audio-denoiser ONNX
+                        权重就位后即可启用。
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
 
             {(phase === "generating" || phase === "done" || phase === "failed") &&

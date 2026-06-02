@@ -34,6 +34,17 @@ class GenerationRequest(BaseModel):
     preset_id: Optional[str] = Field(default=None, description="Preset avatar id when avatar_type=preset.")
     fps: Optional[int] = Field(default=25, ge=1, le=60, description="Output video fps.")
     resize_factor: Optional[float] = Field(default=1.0, ge=0.1, le=4.0, description="Down/up scale of output frames.")
+    enable_vocal_separation: Optional[bool] = Field(
+        default=True,
+        description=(
+            "Run ONNX vocal/accompaniment separation on DirectML before lip-sync. "
+            "When enabled, the vocals drive lip-sync and the accompaniment is re-mixed into the final video."
+        ),
+    )
+    enable_denoising: Optional[bool] = Field(
+        default=False,
+        description="Reserved for future resemble-audio-denoiser ONNX support; not active yet.",
+    )
 
     def has_audio_ref(self) -> bool:
         return bool(self.music_id or self.slice_id)

@@ -42,11 +42,15 @@ interface AppState {
   slice: SliceInfo | null;
   selectedAvatar: SelectedAvatar | null;
   currentTask: CurrentTask | null;
+  enableVocalSeparation: boolean;
+  enableDenoising: boolean;
   setCurrentMusic: (m: CurrentMusic | null) => void;
   setSelectedSegment: (s: { start: number; end: number } | null) => void;
   setSlice: (s: SliceInfo | null) => void;
   setSelectedAvatar: (a: SelectedAvatar | null) => void;
   setCurrentTask: (t: CurrentTask | null) => void;
+  setEnableVocalSeparation: (v: boolean) => void;
+  setEnableDenoising: (v: boolean) => void;
   reset: () => void;
 }
 
@@ -58,6 +62,8 @@ export const useStore = create<AppState>()(
       slice: null,
       selectedAvatar: null,
       currentTask: null,
+      enableVocalSeparation: true,
+      enableDenoising: false,
       setCurrentMusic: (m) =>
         set({
           currentMusic: m,
@@ -70,6 +76,8 @@ export const useStore = create<AppState>()(
       setSlice: (s) => set({ slice: s }),
       setSelectedAvatar: (a) => set({ selectedAvatar: a }),
       setCurrentTask: (t) => set({ currentTask: t }),
+      setEnableVocalSeparation: (v) => set({ enableVocalSeparation: v }),
+      setEnableDenoising: (v) => set({ enableDenoising: v }),
       reset: () =>
         set({
           currentMusic: null,
@@ -77,6 +85,8 @@ export const useStore = create<AppState>()(
           slice: null,
           selectedAvatar: null,
           currentTask: null,
+          enableVocalSeparation: true,
+          enableDenoising: false,
         }),
     }),
     {
@@ -87,6 +97,8 @@ export const useStore = create<AppState>()(
         currentMusic: state.currentMusic,
         selectedSegment: state.selectedSegment,
         slice: state.slice,
+        enableVocalSeparation: state.enableVocalSeparation,
+        enableDenoising: state.enableDenoising,
       }),
     },
   ),

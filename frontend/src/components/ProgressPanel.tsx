@@ -14,6 +14,7 @@ const STAGES: { key: string; label: string }[] = [
   { key: "uploaded", label: "上传完成" },
   { key: "chorus_detected", label: "高潮检测完成" },
   { key: "sliced", label: "音频截取完成" },
+  { key: "vocal_separation", label: "人声分离（DirectML）" },
   { key: "started", label: "开始生成" },
   { key: "session_loaded", label: "加载推理会话" },
   { key: "mel_extracted", label: "提取音频特征" },
@@ -25,6 +26,9 @@ const STAGES: { key: string; label: string }[] = [
 function mapStageToKey(stage: string | undefined): string {
   if (!stage) return "";
   const s = stage.toLowerCase();
+  if (s.includes("vocal") || s.includes("separ") || s.includes("denois")) {
+    return "vocal_separation";
+  }
   if (s.includes("upload")) return "uploaded";
   if (s.includes("chorus")) return "chorus_detected";
   if (s.includes("slice")) return "sliced";
@@ -38,7 +42,7 @@ function mapStageToKey(stage: string | undefined): string {
   if (s.includes("lipsync") || s.includes("infer") || s.includes("frame")) {
     return "lipsync_inference";
   }
-  if (s.includes("video") || s.includes("compose") || s.includes("mux")) {
+  if (s.includes("video") || s.includes("compose") || s.includes("mux") || s.includes("accompaniment")) {
     return "video_composed";
   }
   if (s.includes("done") || s.includes("success") || s.includes("finish")) {

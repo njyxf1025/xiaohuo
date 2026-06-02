@@ -24,11 +24,22 @@
   - [x] SubTask 4.3: 实现形象列表查询和预览 API
 
 - [x] Task 5: 唇形同步模型集成 - Wav2Lip-ONNX（唯一模型）
-  - [x] SubTask 5.1: 安装推理依赖 `pip install onnxruntime-directml`（同时安装 `onnxruntime` 作为 CPU 兜底）
-  - [x] SubTask 5.2: 获取/导出 wav2lip.onnx 与 face_detection.onnx 权重
-  - [x] SubTask 5.3: 封装 Wav2Lip-ONNX 推理接口（输入：音频 + 形象，输出：视频；providers 顺序：[DmlExecutionProvider, CPUExecutionProvider]）
-  - [x] SubTask 5.4: 实现多平台 GPU provider 自适应（AMD/NVIDIA/Intel 走 DirectML，失败回退 CPU）
-  - [x] SubTask 5.5: 实现视频生成进度回调机制（session 创建、mel 计算、推理帧、合成）
+  - [x] SubTask 5.1: 安装推理依赖 `pip install onnxruntime-directml`（不再需要 `onnxruntime` CPU 兜底）
+  - [x] SubTask 5.2: 获取/导出 wav2lip_hq.onnx / wav2lip.onnx 与 face_detection.onnx / s3fd.onnx 权重
+  - [x] SubTask 5.3: 封装 Wav2Lip-ONNX 推理接口（输入：音频 + 形象，输出：视频；providers 严格限定：`["DmlExecutionProvider"]`，拒绝 CPU 兜底）
+  - [x] SubTask 5.4: 强制使用 SessionOptions.execution_mode = ORT_SEQUENTIAL（DirectML 不支持并行图执行）
+  - [x] SubTask 5.5: 实现多平台 GPU provider 自适应（AMD/NVIDIA/Intel 走 DirectML，无 DML 立即抛 DirectMLNotAvailable 503）
+  - [x] SubTask 5.6: 实现视频生成进度回调机制（session 创建、mel 计算、推理帧、合成）
+
+- [x] Task 5b: ONNX 人声分离子模块（DirectML 强约束）
+  - [x] SubTask 5b.1: 创建 `models/vocal_separation/` 目录与 README（说明支持的 ONNX 模型候选：vocal_separation.onnx / mel_band_roformer.onnx / htdemucs.onnx / spleeter_2stems.onnx / mdx_q.onnx / kim_vocal.onnx）
+  - [x] SubTask 5b.2: 实现 `services/vocal_separation.py`：单例 VocalSeparator，ONNX Runtime + DirectML（CPU 兜底禁用，顺序执行模式）
+  - [x] SubTask 5b.3: 实现 `separate(audio_path, output_dir)` → (vocals.wav, accompaniment.wav)；输出 1-stem 模型时合成静音伴奏
+  - [x] SubTask 5b.4: 集成到 `services/wav2lip_pipeline.py`：截取后先做分离，纯人声驱动 Wav2Lip，FFmpeg 把伴奏重混到最终 mp4
+  - [x] SubTask 5b.5: API 扩展：`POST /api/v1/generation` 新增 `enable_vocal_separation`（默认 true）与 `enable_denoising`（默认 false，预留 resemble-denoiser）
+  - [x] SubTask 5b.6: 新增 `POST /api/v1/generation/vocal_separation/warmup`；`/engine/status` 暴露 `vocal_separation` 子对象
+  - [x] SubTask 5b.7: 进度面板新增「人声分离（DirectML）」阶段；ModelInfoCard 补「人声分离 + 伴奏重混」feature
+  - [x] SubTask 5b.8: 软失败：分离模型未安装时 WARN 降级到原始音频（不阻塞任务）
 
 - [x] Task 6: 视频生成 API 与结果管理
   - [x] SubTask 6.1: 实现视频生成 API（POST /api/generate，含参数校验）
@@ -56,8 +67,10 @@
 - [Task 3] depends on [Task 1]
 - [Task 4] depends on [Task 1]
 - [Task 5] depends on [Task 2]（Wav2Lip-ONNX 需要 GPU 抽象层决定 provider 优先级）
-- [Task 6] depends on [Task 5]
+- [Task 5b] depends on [Task 2, Task 5]（人声分离与 Wav2Lip 共享 DirectML EP / 同一引擎基类）
+- [Task 6] depends on [Task 5, Task 5b]
 - [Task 7] depends on [Task 1]
 - [Task 8] depends on [Task 6, Task 7]
 - Task 3, Task 4, Task 5 可并行开发
+- Task 5b 可在 Task 5 完成后并行开发
 - Task 7 的各子任务在前端框架搭建后可并行开发

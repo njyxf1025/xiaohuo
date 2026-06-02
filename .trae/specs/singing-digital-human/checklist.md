@@ -25,7 +25,21 @@
 - [x] 推理接口 providers 严格限定为 `["DmlExecutionProvider"]`（不再包含 CPU）
 - [ ] 在 AMD 6700XT 上 DirectML EP 成功创建会话并完成推理 — Note: requires the AMD 6700XT hardware + ONNX weights; cannot be verified in this CI environment.
 - [x] DirectML 不可用时立即报错（503 `directml_unavailable`）并拒绝 CPU 降级
+- [x] SessionOptions.execution_mode = ORT_SEQUENTIAL（DirectML 不支持并行图执行）
 - [x] 进度回调覆盖 session 创建、mel 计算、推理帧、合成各阶段
+
+## ONNX 人声分离（子模块）
+- [x] `models/vocal_separation/` 目录与 README 已创建
+- [ ] 任一 ONNX 分离权重已就位 — Note: weights not present; 服务可正常运行（WARN 降级到原始音频）
+- [x] `services/vocal_separation.py` 单例 + DirectML + ORT_SEQUENTIAL 实现
+- [x] `separate(audio_path, output_dir) → (vocals.wav, accompaniment.wav)` 接口
+- [x] 集成到 `wav2lip_pipeline.py`：vocals 驱动 Wav2Lip，FFmpeg 把 accompaniment 重混进 mp4
+- [x] `POST /api/v1/generation` 新增 `enable_vocal_separation`（默认 true）+ `enable_denoising`（默认 false）
+- [x] `POST /api/v1/generation/vocal_separation/warmup` 独立预热端点
+- [x] `/engine/status` 暴露 `vocal_separation: { loaded, model_present, model_path, providers }`
+- [x] 软失败：未安装分离模型时 WARN 降级，task result `vocal_separation_applied=false`
+- [x] 进度面板新增「人声分离（DirectML）」阶段
+- [x] ModelInfoCard 补「人声分离 + 伴奏重混」feature 卡
 
 ## 调度与 API
 - [x] 视频生成 API（POST /api/generate）参数校验完整，返回任务 ID，支持进度查询

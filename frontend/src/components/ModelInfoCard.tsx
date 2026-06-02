@@ -1,4 +1,13 @@
-import { AlertTriangle, Cpu, Gauge, Layers, ShieldX, Sparkles, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  AudioLines,
+  Cpu,
+  Gauge,
+  Layers,
+  ShieldX,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 
 const features = [
   {
@@ -10,6 +19,11 @@ const features = [
     icon: Zap,
     title: "DirectML GPU 加速",
     desc: "强制使用 DmlExecutionProvider，AMD / NVIDIA / Intel GPU 自动适配。",
+  },
+  {
+    icon: AudioLines,
+    title: "人声分离 + 伴奏重混",
+    desc: "Spleeter / UVR5 等 ONNX 分离模型在 DirectML 上跑人声/伴奏分离，纯人声驱动唇形，伴奏重混，告别口型抖动。",
   },
   {
     icon: ShieldX,

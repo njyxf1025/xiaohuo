@@ -1,19 +1,21 @@
 # 会唱歌的数字人 Spec
 
 ## Why
-用户拥有本地音乐但无法让数字人演唱出来。需要一个端到端 Web 应用：上传音乐后自动检测高潮部分，截取片段由数字人音画同步、口型一致地演唱出来，呈现美观的交互界面。模型层只保留 Wav2Lip-ONNX（ONNX Runtime + DirectML），通过 DirectML 跨平台覆盖 AMD/NVIDIA/Intel GPU，CPU 自动回滚，部署更轻量、兼容性更好。
+用户拥有本地音乐但无法让数字人演唱出来。需要一个端到端 Web 应用：上传音乐后自动检测高潮部分，截取片段由数字人音画同步、口型一致地演唱出来，呈现美观的交互界面。模型层只保留 Wav2Lip-ONNX（ONNX Runtime + DirectML），通过 DirectML 跨平台覆盖 AMD/NVIDIA/Intel GPU，**禁止 CPU 降级**。为彻底解决「带伴奏歌曲口型抖动」问题，引入 **ONNX 人声分离** 子模块（与 Wav2Lip 共用同一 DirectML EP，CPU 兜底同样禁用），推理时纯人声驱动唇形，最终视频用 FFmpeg 把伴奏重混回音轨。
 
 **高潮检测采用「pychorus 自动检测 + Wavesurfer.js 可视化与微调」的混合方案**——理由见末尾「方案对比：pychorus vs Wavesurfer.js」一节，结论是两者并非互斥的替代关系，而是互补的协作关系。
 
 ## What Changes
 - 构建全栈 Web 应用：Python 后端（FastAPI）+ 现代前端（React + Vite + TailwindCSS）
-- 集成 Wav2Lip-ONNX 唇形同步模型（唯一模型）：使用 ONNX Runtime + DirectML 在 AMD/NVIDIA/Intel GPU 上推理，CPU 兜底
+- 集成 Wav2Lip-ONNX 唇形同步模型（唯一模型）：使用 ONNX Runtime + DirectML 在 AMD/NVIDIA/Intel GPU 上推理，**CPU 兜底已禁用**
+- 集成 ONNX 人声分离子模块（Spleeter / UVR5 / Mel-Band-Roformer / htdemucs 等 ONNX 导出，与 Wav2Lip 共用同一 DirectML EP）：推理前先把纯人声送进 Wav2Lip，最终视频用 FFmpeg 把伴奏重混回音轨
 - 音乐上传与高潮自动检测（pychorus + librosa），前端波形可视化与区间拖拽
-- GPU 抽象层，支持 AMD（DirectML/ROCm）、NVIDIA（DirectML/CUDA）、Intel（DirectML），无 GPU 时 CPU 回退
+- GPU 抽象层，支持 AMD（DirectML/ROCm）、NVIDIA（DirectML/CUDA）、Intel（DirectML）；无 DirectML 时**直接报错**，禁止 CPU 回退
 - 数字人形象管理：自定义上传（图片/视频，含人脸检测）+ 预设形象
 - 详细结构化后端日志：请求 ID、阶段耗时、错误堆栈、GPU/Provider 信息
-- 美观深色主题前端，含音频波形、视频预览、生成进度动画
+- 美观深色主题前端，含音频波形、视频预览、生成进度动画（新增「人声分离（DirectML）」阶段）
 - **BREAKING（针对原三模型方案）**：删除 SadTalker、LatentSync 两种模型及其相关代码/权重/任务；模型调度器简化为 Wav2Lip-ONNX 单一路径
+- **BREAKING（针对原 ONNX 部署）**：所有 ONNX 推理统一走 DirectML，移除全部 CPUExecutionProvider 路径
 
 ## Impact
 - Affected specs: 新项目，无已有 spec
@@ -47,7 +49,7 @@
 - **THEN** 系统加载该预设形象的预览图和必要数据
 
 ### Requirement: 唇形同步视频生成（Wav2Lip-ONNX）
-系统 SHALL 使用 Wav2Lip 的 ONNX 导出模型，通过 ONNX Runtime + DirectML 在多平台 GPU 上推理，将截取的高潮音频与数字人形象合成口型同步的演唱视频。
+系统 SHALL 使用 Wav2Lip 的 ONNX 导出模型，通过 ONNX Runtime + DirectML 在多平台 GPU 上推理，将截取的高潮音频与数字人形象合成口型同步的演唱视频。**CPU 兜底禁用**：DirectML 不可用时系统直接返回 HTTP 503，绝不静默回退到 CPUExecutionProvider。
 
 #### Scenario: 使用 Wav2Lip-ONNX 生成视频
 - **WHEN** 用户点击生成按钮
@@ -76,6 +78,29 @@
 - **WHEN** `onnxruntime-directml` 未安装、或 onnxruntime 不可用、或没有任何 DML 设备
 - **THEN** 系统立刻报错：`/api/v1/health` 返回 503 `status=unavailable`；`/api/v1/system/info` 返回 503；`/api/v1/generation` 返回 503 `error=directml_unavailable`；`/api/v1/generation/{id}` 任务进入 `failed` 状态 `error="DirectML unavailable: ..."`；启动日志以 **FATAL** 级别说明缺失原因
 - **THEN** **绝不**降级到 CPUExecutionProvider（CPU 太慢，推理实际不可用）
+
+### Requirement: 音频降噪与人声分离
+系统 SHALL 在 Wav2Lip 推理前，先对截取的高潮音频做 **ONNX 人声分离**，把纯人声送进 Wav2Lip 驱动唇形；最终视频用 FFmpeg 把分离出的伴奏重混回音轨，从而：
+- 避免重低音伴奏导致的口型抖动
+- 维持用户听到的完整歌曲体验
+
+#### Scenario: 启用人声分离（默认）
+- **WHEN** 用户提交生成请求且 `enable_vocal_separation=true`（默认）
+- **THEN** 系统调用 ONNX 分离模型（U5R / Spleeter / Mel-Band-Roformer / htdemucs 等任一 ONNX 导出）从 DirectML EP 推理，返回 `vocals.wav` 与 `accompaniment.wav`；Wav2Lip 用 vocals 跑唇形，FFmpeg 用 accompaniment 合成最终 mp4
+- **THEN** 进度面板出现「人声分离（DirectML）」阶段，task result 中 `vocal_separation_applied=true`，并返回 `vocals_path` / `accompaniment_path`
+
+#### Scenario: 分离模型未安装
+- **WHEN** `enable_vocal_separation=true` 但 `models/vocal_separation/` 下没有任何 ONNX 权重
+- **THEN** 系统**不报错**，降级为用原始音频驱动 Wav2Lip（用户口型可能轻微抖动，但流程仍跑得通）；日志 WARN 级别说明降级原因
+- **THEN** task result 中 `vocal_separation_applied=false`，`vocals_path=null`，`accompaniment_path=null`
+
+#### Scenario: DirectML 不可用且启用了人声分离
+- **WHEN** `enable_vocal_separation=true` 但 DirectML 不可用
+- **THEN** 系统立刻返回 503 `error=directml_unavailable`，任务进入 failed 状态（**不会**降级到 CPU 跑分离模型，因为 CPU 推理不可用）
+
+#### Scenario: 关闭人声分离
+- **WHEN** 用户在生成页关掉「启用人声分离」开关
+- **THEN** 系统跳过 vocal_separation 阶段，直接用原始音频驱动 Wav2Lip；最终视频音频 = 原始音乐；task result 中 `vocal_separation_applied=false`
 
 ### Requirement: 详细后端日志
 系统 SHALL 在所有关键操作中记录详细日志，包括请求参数、处理步骤、耗时、错误堆栈等，确保任何问题都能被追踪和定位。

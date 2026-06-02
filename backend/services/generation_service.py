@@ -275,6 +275,7 @@ class GenerationService:
             return
         fps = int(params.fps or DEFAULT_FPS)
         resize = float(params.resize_factor or DEFAULT_RESIZE_FACTOR)
+        enable_vs = bool(getattr(params, "enable_vocal_separation", True))
         output_path = self.output_video_path(task_id)
         thumb_path = self.output_thumbnail_path(task_id)
         req = PipelineRequest(
@@ -289,6 +290,18 @@ class GenerationService:
             resize_factor=resize,
             progress_cb=cb,
             preserve_audio=True,
+            enable_vocal_separation=enable_vs,
+        )
+        manager.update_progress(task_id, 12.0, "vocal_separation", "audio preprocessing")
+        _logger.info(
+            "starting generation",
+            extra={
+                "stage": "generation.start_pipeline",
+                "task_id": task_id,
+                "fps": fps,
+                "resize_factor": resize,
+                "enable_vocal_separation": enable_vs,
+            },
         )
         try:
             result = run_pipeline(req)
@@ -316,6 +329,11 @@ class GenerationService:
             "height": int(result.height),
             "mel_shape": list(result.mel_shape),
             "muxed": bool(result.muxed),
+            "vocal_separation_applied": bool(result.vocal_separation_applied),
+            "vocals_path": str(result.vocals_path) if result.vocals_path else None,
+            "accompaniment_path": (
+                str(result.accompaniment_path) if result.accompaniment_path else None
+            ),
             "request_id": request_id,
         }
         manager.complete_task(task_id, result_payload)

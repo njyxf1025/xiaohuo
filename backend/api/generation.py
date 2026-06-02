@@ -18,6 +18,10 @@ from models.generation_schemas import (
 )
 from services.generation_service import GenerationService, get_generation_service
 from services.task_manager import get_task_manager
+from services.vocal_separation import (
+    VocalSeparationDirectMLNotAvailable,
+    get_vocal_separator,
+)
 from services.wav2lip_engine import (
     Wav2LipDirectMLNotAvailable,
     Wav2LipEngine,
@@ -377,6 +381,8 @@ async def engine_status(request: Request) -> Any:
     engine = Wav2LipEngine.instance()
     paths = engine.model_paths()
     dml_ok, dml_reason = engine.is_directml_ready()
+    separator = get_vocal_separator()
+    sep_paths = separator.model_paths()
     payload = {
         "loaded": engine.is_loaded(),
         "directml_available": dml_ok,
@@ -387,6 +393,12 @@ async def engine_status(request: Request) -> Any:
         "wav2lip_path": str(paths.wav2lip_path) if paths and paths.wav2lip_path else None,
         "face_detect_path": str(paths.face_detect_path) if paths and paths.face_detect_path else None,
         "last_error": engine.last_error(),
+        "vocal_separation": {
+            "loaded": separator.is_loaded(),
+            "model_path": str(sep_paths.model_path) if sep_paths else None,
+            "model_present": bool(sep_paths and sep_paths.is_complete()),
+            "providers": separator.providers(),
+        },
         "request_id": get_request_id(),
         "timestamp": time.time(),
     }
@@ -430,6 +442,18 @@ async def engine_warmup(request: Request) -> Any:
         }
         return JSONResponse(status_code=503, content=payload)
     paths = engine.model_paths()
+    separator = get_vocal_separator()
+    sep_paths = separator.model_paths()
+    sep_ok = True
+    sep_error: Optional[str] = None
+    try:
+        sep_ok = separator.warmup()
+    except VocalSeparationDirectMLNotAvailable as exc:
+        sep_ok = False
+        sep_error = str(exc)
+    except Exception as exc:
+        sep_ok = False
+        sep_error = str(exc)
     payload = {
         "ok": bool(ok),
         "loaded": engine.is_loaded(),
@@ -441,6 +465,66 @@ async def engine_warmup(request: Request) -> Any:
         "wav2lip_path": str(paths.wav2lip_path) if paths and paths.wav2lip_path else None,
         "face_detect_path": str(paths.face_detect_path) if paths and paths.face_detect_path else None,
         "last_error": engine.last_error(),
+        "vocal_separation": {
+            "ok": bool(sep_ok),
+            "loaded": separator.is_loaded(),
+            "model_present": bool(sep_paths and sep_paths.is_complete()),
+            "model_path": str(sep_paths.model_path) if sep_paths else None,
+            "providers": separator.providers(),
+            "last_error": separator.last_error() or sep_error,
+        },
+        "request_id": get_request_id(),
+        "timestamp": time.time(),
+    }
+    if not ok:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
+
+
+@router.post("/generation/vocal_separation/warmup", tags=["generation"])
+async def vocal_separation_warmup(request: Request) -> Any:
+    separator = get_vocal_separator()
+    dml_ok, dml_reason = separator.is_directml_ready()
+    if not dml_ok:
+        payload = {
+            "ok": False,
+            "loaded": False,
+            "model_present": False,
+            "directml_available": False,
+            "directml_reason": dml_reason,
+            "cpu_fallback_enabled": False,
+            "providers": [],
+            "provider_label": "none",
+            "last_error": f"directml_unavailable: {dml_reason}",
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+    try:
+        ok = separator.warmup()
+    except VocalSeparationDirectMLNotAvailable as exc:
+        payload = {
+            "ok": False,
+            "loaded": False,
+            "directml_available": False,
+            "directml_reason": str(exc),
+            "cpu_fallback_enabled": False,
+            "providers": [],
+            "provider_label": "none",
+            "last_error": str(exc),
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+    paths = separator.model_paths()
+    payload = {
+        "ok": bool(ok),
+        "loaded": separator.is_loaded(),
+        "model_present": bool(paths and paths.is_complete()),
+        "model_path": str(paths.model_path) if paths else None,
+        "providers": separator.providers(),
+        "provider_label": separator.provider_label(),
+        "last_error": separator.last_error(),
         "request_id": get_request_id(),
         "timestamp": time.time(),
     }
