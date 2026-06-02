@@ -19,6 +19,11 @@ def _build_client() -> TestClient:
     return TestClient(create_app())
 
 
+def _is_dml_unavailable(body: dict) -> bool:
+    directml = body.get("directml") or {}
+    return directml.get("available") is False
+
+
 def test_create_app_imports() -> None:
     assert app is not None
     assert hasattr(app, "routes")
@@ -27,22 +32,45 @@ def test_create_app_imports() -> None:
 def test_health_endpoint() -> None:
     client = _build_client()
     response = client.get("/api/v1/health")
-    assert response.status_code == 200, response.text
     body = response.json()
-    assert body.get("status") == "ok"
     assert "request_id" in body
-    assert "onnx_provider" in body
-    assert "providers" in body["onnx_provider"]
+    assert "directml" in body
+    assert "providers" in body.get("onnx_provider", {})
+    directml = body.get("directml", {})
+    assert directml.get("cpu_fallback_enabled") is False
+    if _is_dml_unavailable(body):
+        assert response.status_code == 503
+        assert body.get("status") == "unavailable"
+    else:
+        assert response.status_code == 200
+        assert body.get("status") == "ok"
 
 
 def test_system_info_endpoint() -> None:
     client = _build_client()
     response = client.get("/api/v1/system/info")
-    assert response.status_code == 200, response.text
     body = response.json()
     assert "request_id" in body
-    assert "onnx_provider" in body
     assert "gpu" in body
+    assert "directml" in body
+    assert "providers" in body.get("onnx_provider", {})
+    directml = body.get("directml", {})
+    assert directml.get("cpu_fallback_enabled") is False
+    if _is_dml_unavailable(body):
+        assert response.status_code == 503
+    else:
+        assert response.status_code == 200
+
+
+def test_engine_status_endpoint() -> None:
+    client = _build_client()
+    response = client.get("/api/v1/generation/engine/status")
+    body = response.json()
+    assert "request_id" in body
+    assert "directml_available" in body
+    assert body.get("cpu_fallback_enabled") is False
+    if not body.get("directml_available"):
+        assert response.status_code == 503
 
 
 def test_mounted_routes_present() -> None:

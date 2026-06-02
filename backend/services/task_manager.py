@@ -172,7 +172,7 @@ class TaskManager:
             ev.set()
         _logger.warning(
             "task failed",
-            extra={"stage": "task.fail", "task_id": task_id, "error": str(error)},
+            extra={"stage": "task.fail", "task_id": task_id, "err_message": str(error)},
         )
 
     def cancel_task(self, task_id: str) -> bool:

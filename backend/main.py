@@ -134,7 +134,7 @@ def create_app() -> FastAPI:
             extra={
                 "stage": "unhandled",
                 "error": type(exc).__name__,
-                "message": str(exc),
+                "err_message": str(exc),
                 "path": str(request.url.path),
                 "method": request.method,
                 "request_id": rid,
@@ -187,17 +187,40 @@ def create_app() -> FastAPI:
             _logger.exception("GPU detection failed: %s", exc)
 
         try:
-            providers, label = onnx_provider.select_providers()
-            _logger.info(
-                "ONNX provider selected",
+            dml_ok, dml_reason = onnx_provider.is_directml_available()
+            if dml_ok:
+                providers, label = onnx_provider.select_providers()
+                _logger.info(
+                    "ONNX provider selected (DirectML required, CPU fallback disabled)",
+                    extra={
+                        "stage": "startup.onnx",
+                        "chosen": label,
+                        "providers": providers,
+                    },
+                )
+            else:
+                _logger.critical(
+                    "FATAL: DirectML not available. CPU fallback has been disabled. "
+                    "Reason: %s. "
+                    "Install onnxruntime-directml and ensure a DirectML-capable GPU is present. "
+                    "The /api/v1/health endpoint will return HTTP 503 until this is resolved.",
+                    dml_reason,
+                    extra={
+                        "stage": "startup.onnx",
+                        "error_code": "directml_unavailable",
+                        "reason": dml_reason,
+                    },
+                )
+        except Exception as exc:
+            _logger.critical(
+                "FATAL: ONNX provider probe failed: %s. CPU fallback disabled.",
+                exc,
+                exc_info=True,
                 extra={
                     "stage": "startup.onnx",
-                    "chosen": label,
-                    "providers": providers,
+                    "error_code": "onnx_probe_failed",
                 },
             )
-        except Exception as exc:
-            _logger.exception("ONNX provider selection failed: %s", exc)
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:

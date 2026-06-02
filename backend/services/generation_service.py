@@ -15,7 +15,11 @@ from models.generation_schemas import GenerationRequest, TaskState
 from services.avatar_service import AvatarService, get_avatar_service
 from services.music_service import get_music_service
 from services.task_manager import TaskCancelled, TaskManager, get_task_manager
-from services.wav2lip_engine import DEFAULT_FPS, DEFAULT_RESIZE_FACTOR
+from services.wav2lip_engine import (
+    DEFAULT_FPS,
+    DEFAULT_RESIZE_FACTOR,
+    Wav2LipDirectMLNotAvailable,
+)
 from services.wav2lip_pipeline import PipelineRequest, run_pipeline
 from utils import files as file_utils
 
@@ -167,6 +171,34 @@ class GenerationService:
         rid = request_id or get_request_id()
         params_dict = params.model_dump()
         task_id = manager.create_task(params=params_dict, request_id=rid)
+
+        try:
+            from services.wav2lip_engine import Wav2LipEngine
+            engine = Wav2LipEngine.instance()
+            dml_ok, dml_reason = engine.is_directml_ready()
+            if not dml_ok:
+                err = (
+                    f"DirectML unavailable: {dml_reason}. "
+                    "Install onnxruntime-directml and ensure a DirectML-capable GPU is present. "
+                    "CPU fallback has been disabled because inference would be unusable."
+                )
+                _logger.error(
+                    "refusing to start generation: DirectML unavailable",
+                    extra={
+                        "stage": "generation.start",
+                        "task_id": task_id,
+                        "reason": dml_reason,
+                        "err_message": err,
+                        "error_code": "directml_unavailable",
+                    },
+                )
+                manager.fail_task(task_id, err)
+                return task_id
+        except Exception as exc:
+            _logger.exception("DirectML probe failed at start_generation: %s", exc)
+            manager.fail_task(task_id, f"DirectML probe failed: {exc}")
+            return task_id
+
         try:
             resolved = self.resolve_sources(params)
         except Exception as exc:
@@ -268,7 +300,7 @@ class GenerationService:
                 extra={
                     "stage": "generation.run",
                     "task_id": task_id,
-                    "error": err,
+                    "err_message": err,
                     "trace": tb[-400:],
                 },
             )

@@ -18,7 +18,11 @@ from models.generation_schemas import (
 )
 from services.generation_service import GenerationService, get_generation_service
 from services.task_manager import get_task_manager
-from services.wav2lip_engine import Wav2LipEngine, Wav2LipModelNotLoaded
+from services.wav2lip_engine import (
+    Wav2LipDirectMLNotAvailable,
+    Wav2LipEngine,
+    Wav2LipModelNotLoaded,
+)
 
 _logger = get_logger("api.generation")
 
@@ -40,7 +44,7 @@ def _error_response(
             "stage": stage,
             "status_code": status_code,
             "error": error,
-            "message": message,
+            "err_message": message,
             "task_id": task_id or "-",
         },
     )
@@ -119,6 +123,14 @@ async def create_generation(
     service = get_generation_service()
     try:
         task_id = service.start_generation(payload, request_id=rid)
+    except Wav2LipDirectMLNotAvailable as exc:
+        return _error_response(
+            request,
+            503,
+            "directml_unavailable",
+            str(exc),
+            stage="generation.create",
+        )
     except Wav2LipModelNotLoaded as exc:
         return _error_response(
             request,
@@ -364,8 +376,12 @@ async def thumbnail_generation(request: Request, task_id: str) -> Any:
 async def engine_status(request: Request) -> Any:
     engine = Wav2LipEngine.instance()
     paths = engine.model_paths()
+    dml_ok, dml_reason = engine.is_directml_ready()
     payload = {
         "loaded": engine.is_loaded(),
+        "directml_available": dml_ok,
+        "directml_reason": dml_reason,
+        "cpu_fallback_enabled": False,
         "providers": engine.providers(),
         "provider_label": engine.provider_label(),
         "wav2lip_path": str(paths.wav2lip_path) if paths and paths.wav2lip_path else None,
@@ -374,17 +390,52 @@ async def engine_status(request: Request) -> Any:
         "request_id": get_request_id(),
         "timestamp": time.time(),
     }
+    if not dml_ok:
+        return JSONResponse(status_code=503, content=payload)
     return payload
 
 
 @router.post("/generation/engine/warmup", tags=["generation"])
 async def engine_warmup(request: Request) -> Any:
     engine = Wav2LipEngine.instance()
-    ok = engine.warmup()
+    dml_ok, dml_reason = engine.is_directml_ready()
+    if not dml_ok:
+        payload = {
+            "ok": False,
+            "loaded": False,
+            "directml_available": False,
+            "directml_reason": dml_reason,
+            "cpu_fallback_enabled": False,
+            "providers": [],
+            "provider_label": "none",
+            "last_error": f"directml_unavailable: {dml_reason}",
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+    try:
+        ok = engine.warmup()
+    except Wav2LipDirectMLNotAvailable as exc:
+        payload = {
+            "ok": False,
+            "loaded": False,
+            "directml_available": False,
+            "directml_reason": str(exc),
+            "cpu_fallback_enabled": False,
+            "providers": [],
+            "provider_label": "none",
+            "last_error": str(exc),
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
     paths = engine.model_paths()
     payload = {
         "ok": bool(ok),
         "loaded": engine.is_loaded(),
+        "directml_available": dml_ok,
+        "directml_reason": dml_reason,
+        "cpu_fallback_enabled": False,
         "providers": engine.providers(),
         "provider_label": engine.provider_label(),
         "wav2lip_path": str(paths.wav2lip_path) if paths and paths.wav2lip_path else None,

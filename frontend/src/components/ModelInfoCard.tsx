@@ -1,4 +1,4 @@
-import { Cpu, Gauge, Layers, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { AlertTriangle, Cpu, Gauge, Layers, ShieldX, Sparkles, Zap } from "lucide-react";
 
 const features = [
   {
@@ -9,12 +9,12 @@ const features = [
   {
     icon: Zap,
     title: "DirectML GPU 加速",
-    desc: "优先使用 DmlExecutionProvider，AMD / NVIDIA / Intel GPU 自动适配。",
+    desc: "强制使用 DmlExecutionProvider，AMD / NVIDIA / Intel GPU 自动适配。",
   },
   {
-    icon: ShieldCheck,
-    title: "CPU 自动兜底",
-    desc: "无 GPU 或 DirectML 不可用时无缝回退 CPUExecutionProvider。",
+    icon: ShieldX,
+    title: "CPU 降级已禁用",
+    desc: "DirectML 不可用时立即报错 503，绝不静默回退到 CPU（CPU 推理太慢，无法使用）。",
   },
   {
     icon: Gauge,
@@ -38,7 +38,7 @@ export default function ModelInfoCard() {
           <div>
             <h3 className="text-lg font-bold text-white">Wav2Lip-ONNX</h3>
             <p className="text-xs text-slate-400">
-              唯一推理模型 · ONNX Runtime + DirectML
+              唯一推理模型 · ONNX Runtime + DirectML（强制）
             </p>
           </div>
           <span className="ml-auto rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-500/30">
@@ -49,8 +49,12 @@ export default function ModelInfoCard() {
         <p className="text-sm leading-relaxed text-slate-300">
           本项目仅保留 Wav2Lip-ONNX 一条推理路径。原 SadTalker、LatentSync 两种
           模型已从代码、权重与调度器中彻底移除，不再提供多模型对比或切换。
-          推理时优先选择 DirectML EP，自动覆盖 AMD / NVIDIA / Intel GPU；
-          当 DirectML 不可用时无缝回退到 CPUExecutionProvider。
+          推理时强制使用 DirectML EP，自动覆盖 AMD / NVIDIA / Intel GPU；
+          <span className="font-semibold text-amber-300">
+            当 DirectML 不可用时系统会立即返回错误（HTTP 503
+            directml_unavailable），不允许 CPU 降级
+          </span>
+          ，避免在无 GPU 环境下「能跑但跑不动」的用户体验。
         </p>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -72,11 +76,16 @@ export default function ModelInfoCard() {
           ))}
         </div>
 
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200/90">
-          <strong>关于模型选型：</strong>
-          采用 ONNX 格式是因为它能跨 ONNX Runtime 的多种 Execution Provider
-          调度，DirectML 进一步让 AMD / NVIDIA / Intel GPU 共用同一套推理代码，
-          极大简化部署与维护成本，相比多模型调度器更轻量、更稳定。
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-200/90">
+          <div className="mb-1 flex items-center gap-1.5 font-semibold">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            部署前置条件
+          </div>
+          必须在安装了 <code className="rounded bg-rose-500/15 px-1 py-0.5">onnxruntime-directml</code> 的
+          Windows 主机上运行，且需具备 DirectML 兼容 GPU（AMD 6700XT / NVIDIA /
+          Intel Arc 等）。若检测不到 DirectML 设备，
+          <code className="rounded bg-rose-500/15 px-1 py-0.5">/api/v1/health</code>{" "}
+          会返回 503。
         </div>
       </div>
     </div>

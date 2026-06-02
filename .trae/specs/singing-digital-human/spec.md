@@ -57,8 +57,8 @@
 - **WHEN** 视频正在生成中
 - **THEN** 前端实时显示生成进度百分比和当前步骤（如"正在加载 ONNX 推理会话"、"正在提取音频特征"、"正在生成唇形"、"正在合成视频"）
 
-### Requirement: GPU 多平台支持（DirectML 优先）
-系统 SHALL 通过 GPU 抽象层支持 AMD（DirectML/ROCm）、NVIDIA（DirectML/CUDA）、Intel（DirectML）显卡，Wav2Lip 推理优先使用 DirectML provider；自动检测可用 provider 并按优先级回退。
+### Requirement: GPU 多平台支持（DirectML 唯一）
+系统 SHALL 通过 GPU 抽象层支持 AMD（DirectML/ROCm）、NVIDIA（DirectML/CUDA）、Intel（DirectML）显卡，Wav2Lip 推理**仅使用 DirectML provider**。CPU 降级**已禁用**：若 DirectML 不可用（驱动缺失/包未装/无 DML 设备），系统必须立即返回 HTTP 503 并在日志中以 FATAL 级别报告，绝不静默降级到 CPU 推理。
 
 #### Scenario: AMD GPU 环境（DirectML）
 - **WHEN** 系统检测到 AMD GPU 且已安装 onnxruntime-directml
@@ -72,9 +72,10 @@
 - **WHEN** 系统检测到 Intel GPU
 - **THEN** Wav2Lip 推理使用 DirectML EP；日志记录 Intel 设备信息
 
-#### Scenario: 无 GPU / 驱动未装环境
-- **WHEN** 系统未检测到可用 GPU 或 onnxruntime-directml 不可用
-- **THEN** Wav2Lip 推理回退到 CPUExecutionProvider，日志明确警告性能下降
+#### Scenario: DirectML 不可用（驱动/包/设备任一缺失）
+- **WHEN** `onnxruntime-directml` 未安装、或 onnxruntime 不可用、或没有任何 DML 设备
+- **THEN** 系统立刻报错：`/api/v1/health` 返回 503 `status=unavailable`；`/api/v1/system/info` 返回 503；`/api/v1/generation` 返回 503 `error=directml_unavailable`；`/api/v1/generation/{id}` 任务进入 `failed` 状态 `error="DirectML unavailable: ..."`；启动日志以 **FATAL** 级别说明缺失原因
+- **THEN** **绝不**降级到 CPUExecutionProvider（CPU 太慢，推理实际不可用）
 
 ### Requirement: 详细后端日志
 系统 SHALL 在所有关键操作中记录详细日志，包括请求参数、处理步骤、耗时、错误堆栈等，确保任何问题都能被追踪和定位。

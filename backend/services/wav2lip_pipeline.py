@@ -11,6 +11,7 @@ from core.logging import get_logger
 from services.wav2lip_engine import (
     DEFAULT_FPS,
     DEFAULT_RESIZE_FACTOR,
+    Wav2LipDirectMLNotAvailable,
     Wav2LipEngine,
     Wav2LipEngineError,
     Wav2LipModelNotLoaded,
@@ -264,10 +265,16 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
     if req.progress_cb is not None:
         req.progress_cb("warmup", 7.0, "warming Wav2Lip engine")
     if not engine.is_loaded():
-        ok = engine.warmup()
+        try:
+            ok = engine.warmup()
+        except Wav2LipDirectMLNotAvailable as exc:
+            raise
         if not ok or not engine.is_loaded():
+            last = engine.last_error() or "unknown"
+            if "directml" in last.lower():
+                raise Wav2LipDirectMLNotAvailable(last)
             raise Wav2LipModelNotLoaded(
-                f"wav2lip weights not loaded: {engine.last_error() or 'unknown'}"
+                f"wav2lip weights not loaded: {last}"
             )
 
     def _cb(stage: str, percent: float, message: Optional[str] = None) -> None:

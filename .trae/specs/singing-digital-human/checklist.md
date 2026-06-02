@@ -20,11 +20,11 @@
 - [x] 预设形象可正常加载和预览
 
 ## Wav2Lip-ONNX（唯一模型）
-- [x] 后端已安装 `onnxruntime-directml` 与 `onnxruntime`（CPU 兜底）
+- [x] 后端已安装 `onnxruntime-directml`（CPU 兜底已禁用）
 - [ ] wav2lip.onnx 与 face_detection.onnx 权重文件已就位 — Note: weights not present in `/workspace/models/wav2lip/` (only `.gitkeep` + README); user must supply them before runtime generation.
-- [x] 推理接口 providers 顺序为 `[DmlExecutionProvider, CPUExecutionProvider]`
+- [x] 推理接口 providers 严格限定为 `["DmlExecutionProvider"]`（不再包含 CPU）
 - [ ] 在 AMD 6700XT 上 DirectML EP 成功创建会话并完成推理 — Note: requires the AMD 6700XT hardware + ONNX weights; cannot be verified in this CI environment.
-- [x] DirectML 不可用时自动回退到 CPUExecutionProvider 并记录警告
+- [x] DirectML 不可用时立即报错（503 `directml_unavailable`）并拒绝 CPU 降级
 - [x] 进度回调覆盖 session 创建、mel 计算、推理帧、合成各阶段
 
 ## 调度与 API

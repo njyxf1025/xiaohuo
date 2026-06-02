@@ -10,6 +10,17 @@ _logger = get_logger("core.onnx_provider")
 ProviderList = List[str]
 
 
+class DirectMLNotAvailable(RuntimeError):
+    code = "directml_unavailable"
+
+    def __init__(
+        self,
+        message: str = "DirectML execution provider is not available; CPU fallback is disabled",
+    ) -> None:
+        super().__init__(message)
+        self.code = "directml_unavailable"
+
+
 def _ort_available() -> bool:
     try:
         import onnxruntime  # type: ignore[import-not-found]
@@ -77,44 +88,42 @@ def _directml_module_ok() -> bool:
         return False
 
 
-def select_providers() -> Tuple[ProviderList, str]:
+def is_directml_available() -> Tuple[bool, str]:
     if not _ort_available():
-        return (["CPUExecutionProvider"], "cpu-fallback")
+        return (False, "onnxruntime package not importable")
+    if not _directml_module_ok():
+        return (False, "onnxruntime-directml package not installed")
+    providers = _ort_get_providers()
+    if "DmlExecutionProvider" not in providers:
+        return (False, "DmlExecutionProvider not registered in onnxruntime")
+    dml_devices = _dml_device_count()
+    if dml_devices <= 0:
+        return (False, "no DirectML-capable GPU device detected")
+    return (True, f"DirectML ready: {dml_devices} device(s) detected")
 
-    try:
-        providers = _ort_get_providers()
-        has_cpu = "CPUExecutionProvider" in providers
 
-        dml_module_ok = _directml_module_ok()
-        dml_in_list = "DmlExecutionProvider" in providers
-        dml_devices = _dml_device_count() if dml_module_ok or dml_in_list else 0
-
-        if dml_in_list and dml_devices > 0:
-            providers_list: ProviderList = ["DmlExecutionProvider", "CPUExecutionProvider"] if has_cpu else ["DmlExecutionProvider"]
-            _logger.info(
-                "ONNX provider chosen=%s dml_devices=%d providers=%s",
-                "dml",
-                dml_devices,
-                providers_list,
-            )
-            return (providers_list, "dml")
-
-        if dml_in_list and dml_devices == 0:
-            if has_cpu:
-                _logger.warning(
-                    "DmlExecutionProvider listed but no DML devices available; falling back to CPUExecutionProvider",
-                )
-                return (["CPUExecutionProvider"], "cpu-fallback")
-            return (["DmlExecutionProvider"], "dml-no-device")
-
-        if has_cpu:
-            _logger.warning("DmlExecutionProvider unavailable; falling back to CPUExecutionProvider")
-            return (["CPUExecutionProvider"], "cpu-fallback")
-
-        return (providers or ["CPUExecutionProvider"], "cpu-fallback")
-    except Exception as exc:
-        _logger.exception("provider selection failed: %s", exc)
-        return (["CPUExecutionProvider"], "cpu-fallback")
+def select_providers() -> Tuple[ProviderList, str]:
+    ok, reason = is_directml_available()
+    if not ok:
+        _logger.error(
+            "DirectML not available; refusing to fall back to CPU. reason=%s "
+            "Install onnxruntime-directml and ensure a DirectML-capable GPU is present.",
+            reason,
+            extra={"stage": "onnx_provider.select", "reason": reason},
+        )
+        raise DirectMLNotAvailable(reason)
+    providers_list: ProviderList = ["DmlExecutionProvider"]
+    dml_devices = _dml_device_count()
+    _logger.info(
+        "ONNX provider chosen=DmlExecutionProvider dml_devices=%d (CPU fallback disabled)",
+        dml_devices,
+        extra={
+            "stage": "onnx_provider.select",
+            "providers": providers_list,
+            "dml_devices": dml_devices,
+        },
+    )
+    return (providers_list, "dml")
 
 
 def get_device_id_for_provider(label: str, providers: ProviderList) -> int:

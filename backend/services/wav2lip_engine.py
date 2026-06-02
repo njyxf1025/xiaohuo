@@ -11,6 +11,7 @@ import numpy as np
 from core import onnx_provider
 from core.config import get_settings
 from core.logging import get_logger
+from core.onnx_provider import DirectMLNotAvailable
 from utils.mel import EXPECTED_CHUNK_FRAMES
 
 _logger = get_logger("services.wav2lip_engine")
@@ -24,6 +25,20 @@ class Wav2LipModelNotLoaded(Wav2LipEngineError):
     def __init__(self, message: str = "Wav2Lip model weights are not loaded") -> None:
         super().__init__(message)
         self.code = "model_not_loaded"
+
+
+class Wav2LipDirectMLNotAvailable(Wav2LipEngineError):
+    code = "directml_unavailable"
+
+    def __init__(self, message: str = None) -> None:
+        if message is None:
+            message = (
+                "DirectML execution provider is required but not available. "
+                "Install onnxruntime-directml and ensure a DirectML-capable GPU is present. "
+                "CPU fallback has been disabled because inference would be unusable."
+            )
+        super().__init__(message)
+        self.code = "directml_unavailable"
 
 
 @dataclass
@@ -133,6 +148,12 @@ class Wav2LipEngine:
     def is_loaded(self) -> bool:
         return self._wav2lip_session is not None and self._face_session is not None
 
+    def is_directml_ready(self) -> Tuple[bool, str]:
+        try:
+            return onnx_provider.is_directml_available()
+        except Exception as exc:
+            return (False, f"directml probe failed: {exc}")
+
     def provider_label(self) -> str:
         return self._provider_label
 
@@ -169,7 +190,24 @@ class Wav2LipEngine:
                 )
                 return False
             self._paths = paths
-            providers, label = onnx_provider.select_providers()
+            try:
+                providers, label = onnx_provider.select_providers()
+            except DirectMLNotAvailable as exc:
+                self._last_error = f"directml_unavailable: {exc}"
+                _logger.error(
+                    "Wav2Lip warmup aborted: DirectML unavailable (%s)",
+                    exc,
+                    extra={"stage": "wav2lip.warmup", "error_code": "directml_unavailable"},
+                )
+                return False
+            if "DmlExecutionProvider" not in providers:
+                self._last_error = "selected providers do not include DirectML; refusing CPU fallback"
+                _logger.error(
+                    "Wav2Lip warmup aborted: providers=%s lacks DirectML",
+                    providers,
+                    extra={"stage": "wav2lip.warmup", "error_code": "directml_unavailable"},
+                )
+                return False
             self._providers = list(providers)
             self._provider_label = label
             session_options = _build_session_options(ort)
@@ -476,9 +514,17 @@ class Wav2LipEngine:
         resize_factor: float = DEFAULT_RESIZE_FACTOR,
     ) -> np.ndarray:
         if not self.is_loaded():
-            ok = self.warmup()
+            try:
+                ok = self.warmup()
+            except DirectMLNotAvailable as exc:
+                raise Wav2LipDirectMLNotAvailable(str(exc)) from exc
             if not ok or not self.is_loaded():
-                raise Wav2LipModelNotLoaded("Wav2Lip weights not loaded")
+                last = self.last_error() or "unknown"
+                if "directml" in last.lower():
+                    raise Wav2LipDirectMLNotAvailable(last)
+                raise Wav2LipModelNotLoaded(
+                    f"wav2lip weights not loaded: {last}"
+                )
         if video_frames is None or len(video_frames) == 0:
             raise Wav2LipEngineError("video_frames is empty")
         cv2 = _try_import_cv2()

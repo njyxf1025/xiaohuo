@@ -598,7 +598,7 @@ class AvatarService:
             )
             _logger.info(
                 "preset generated",
-                extra={"stage": "avatar.presets", "preset_id": preset_id, "name": name},
+                extra={"stage": "avatar.presets", "preset_id": preset_id, "preset_name": name},
             )
 
         if not manifests:

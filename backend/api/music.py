@@ -40,7 +40,7 @@ def _error_response(
             "stage": stage,
             "status_code": status_code,
             "error": error,
-            "message": message,
+            "err_message": message,
         },
     )
     return JSONResponse(

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "updated_at": 1780384485.5085392,
+  "presets": [
+    {
+      "preset_id": "preset_01",
+      "name": "Preset 01",
+      "filename": "preset_01.png",
+      "file_path": "/workspace/backend/data/avatars/presets/preset_01.png",
+      "thumbnail_path": "/workspace/backend/data/avatars/presets/preset_01_thumb.jpg",
+      "description": "auto-generated placeholder avatar",
+      "created_at": 1780384485.474376
+    },
+    {
+      "preset_id": "preset_02",
+      "name": "Preset 02",
+      "filename": "preset_02.png",
+      "file_path": "/workspace/backend/data/avatars/presets/preset_02.png",
+      "thumbnail_path": "/workspace/backend/data/avatars/presets/preset_02_thumb.jpg",
+      "description": "auto-generated placeholder avatar",
+      "created_at": 1780384486.474376
+    },
+    {
+      "preset_id": "preset_03",
+      "name": "Preset 03",
+      "filename": "preset_03.png",
+      "file_path": "/workspace/backend/data/avatars/presets/preset_03.png",
+      "thumbnail_path": "/workspace/backend/data/avatars/presets/preset_03_thumb.jpg",
+      "description": "auto-generated placeholder avatar",
+      "created_at": 1780384487.474376
+    }
+  ]
+}
