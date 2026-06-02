@@ -3,6 +3,8 @@
 ## Why
 用户拥有本地音乐但无法让数字人演唱出来。需要一个端到端 Web 应用：上传音乐后自动检测高潮部分，截取片段由数字人音画同步、口型一致地演唱出来，呈现美观的交互界面。模型层只保留 Wav2Lip-ONNX（ONNX Runtime + DirectML），通过 DirectML 跨平台覆盖 AMD/NVIDIA/Intel GPU，CPU 自动回滚，部署更轻量、兼容性更好。
 
+**高潮检测采用「pychorus 自动检测 + Wavesurfer.js 可视化与微调」的混合方案**——理由见末尾「方案对比：pychorus vs Wavesurfer.js」一节，结论是两者并非互斥的替代关系，而是互补的协作关系。
+
 ## What Changes
 - 构建全栈 Web 应用：Python 后端（FastAPI）+ 现代前端（React + Vite + TailwindCSS）
 - 集成 Wav2Lip-ONNX 唇形同步模型（唯一模型）：使用 ONNX Runtime + DirectML 在 AMD/NVIDIA/Intel GPU 上推理，CPU 兜底
@@ -104,3 +106,77 @@
 - LatentSync 模型及其扩散模型推理路径（原 Task 7）
 - 原多模型调度器（Task 8.1）改为 Wav2Lip-ONNX 单一调度路径
 - 前端三模型对比卡片（Task 9.5）改为单一模型说明 + ONNX 推理特性介绍
+
+## 方案对比：pychorus vs Wavesurfer.js
+
+> 结论先行：**两者不是互斥的替代关系，而是互补的协作关系**。pychorus 解决「自动找到高潮在哪里」，Wavesurfer.js 解决「把结果画出来让用户微调」。本项目采用「pychorus 后端检测 + Wavesurfer.js 前端可视化与微调」的混合方案。
+
+### 方案 A：pychorus（后端自动检测）
+
+**原理**：pychorus 是基于 chroma 频谱重复度检测的 Python 库。它先把音频切成短片段，提取每段的 chroma 特征（12 维色度向量），再用一个滑动窗口与自相似矩阵寻找「重复出现次数最多、能量最集中」的段落作为候选高潮。
+
+**优点**
+- 自动化程度高：上传即得推荐区间，零用户操作
+- 算法成熟：对流行/电子/摇滚等重复结构明显的歌曲效果较好
+- 服务端可调优：可针对曲库批量调参、离线评测准确率
+- 内置兜底：本项目 `services/chorus.py` 在 pychorus 失败时回退到 librosa loudest window（能量最大的 20 秒窗口），保证永远有结果
+- 离线友好：上传后用户可以断开浏览器，等结果回来再确认
+
+**缺点**
+- Python 依赖：pychorus 在 PyPI 上维护不活跃，pip 安装常失败 → 必须有 librosa 兜底（本项目已实现）
+- 算法固定：对人声/纯音乐/复杂编曲识别准确度下降
+- 不提供可视化：用户看不到「为什么这是高潮」
+- 一次只能给一个推荐值：用户无法表达「我想要副歌第二遍」
+
+### 方案 B：Wavesurfer.js（前端可视化 + 手动框选）
+
+**原理**：Wavesurfer.js 本身是**音频波形渲染与播放库，不做自动检测**。但配合其 Regions 插件可让用户在画布上**手动拖拽两个手柄**框选起止时间，本质是「人肉检测」。
+
+**优点**
+- 可视化效果最佳：实时波形、缩放、播放头联动，所见即所得
+- 交互极强：拖拽即听，配合播放头确认方便
+- 离线可用：音频载入后无需服务端交互
+- 不依赖任何后端算法
+- 灵活度最高：用户可以选副歌、副歌第二遍、bridge、任何位置
+
+**缺点**
+- **不会自动检测**：用户必须自己听、自己判断，对不熟悉歌曲的人不友好
+- 用户体验负担：每首歌都要点十几下才能选出 20 秒
+- 没有算法保障：选错区间得不到任何提示
+- 增加前端包体积：Wavesurfer.js + regions 插件约 ~80KB
+- 单纯用它无法完成「让数字人自动唱副歌」这一核心诉求
+
+### 维度对比矩阵
+
+| 维度 | pychorus（后端） | Wavesurfer.js（前端） | 混合（本项目） |
+| --- | --- | --- | --- |
+| 自动检测 | ✅ 是 | ❌ 否 | ✅ 是 |
+| 可视化呈现 | ❌ 否 | ✅ 强 | ✅ 强 |
+| 用户微调 | ❌ 不支持 | ✅ 原生 | ✅ 原生 |
+| 离线工作 | ❌ 需服务端 | ✅ 是 | ⚠️ 检测需服务端 |
+| 上手成本 | 🟢 零 | 🔴 高 | 🟢 低 |
+| 准确度天花板 | 🟡 受限于算法 | 🟢 仅受限于用户 | 🟢 兼具 |
+| 失败兜底 | 🟡 需自行实现 | 🟢 永远可用 | 🟢 双重兜底 |
+| 实施复杂度 | 🟢 中（一个 Python 函数） | 🟢 中（一个 React 组件） | 🟡 略高（要联调两边） |
+| 适合谁 | 大量批处理 | 音乐人/精细创作 | 通用 C 端用户 |
+
+### 业界参考
+- **Spotify / 网易云音乐「分享歌曲片段」**：自动识别 + 可拖拽微调（与本方案一致）
+- **LALAL.AI / Moises.ai**：自动检测 + 波形可视化（与本方案一致）
+- **Audacity / 传统音频编辑器**：纯手动框选（对应方案 B）
+- **Shazam / ACRCloud**：纯算法识别（对应方案 A）
+
+### 为什么混合方案最优
+
+1. **自动化 + 灵活性兼得**：80% 用户用默认值即可满意；20% 的挑剔用户可拖拽微调
+2. **用户感知路径最短**：上传 → 看到推荐区间 → 试听 → 接受/微调，3 步完成
+3. **鲁棒性最强**：pychorus 失败 → librosa 兜底 → 仍有结果；前端微调 → 永不卡死
+4. **复用现有资产**：pychorus 已在 `services/chorus.py`，Wavesurfer.js 已在 `components/WaveformPlayer.tsx`，**本次实现天然就是混合方案**，无需额外开发
+5. **数据可积累**：后端可记录「用户是否调整了自动检测结果」作为后续算法迭代的反馈信号
+
+### 当前实现对照
+
+- **后端**：[backend/services/chorus.py](file:///workspace/backend/services/chorus.py) — pychorus 优先，长度候选 [20, 15, 25, 30, 10] 秒，librosa loudest window 兜底
+- **API**：`POST /api/v1/music/{music_id}/detect-chorus` + 上传后异步调度，返回 `chorus: { start_sec, end_sec, confidence }`
+- **前端**：[frontend/src/components/WaveformPlayer.tsx](file:///workspace/frontend/src/components/WaveformPlayer.tsx) — Wavesurfer.js 7 渲染 peaks、两个 pointer-event 手柄拖拽调整、`onChange({start,end})` 回调
+- **协作流**：上传 → 后端自动检测 → 前端把推荐区间画在波形上 → 用户拖拽微调 → 点击确认触发截取 API
