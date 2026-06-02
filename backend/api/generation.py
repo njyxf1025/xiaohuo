@@ -16,7 +16,13 @@ from models.generation_schemas import (
     TaskState,
     TaskStatusResponse,
 )
-from services.generation_service import GenerationService, get_generation_service
+from services.generation_service import (
+    SUPPORTED_MODELS,
+    GenerationService,
+    _resolve_model_name,
+    get_generation_service,
+)
+from services.musetalk_engine import MuseTalkDirectMLNotAvailable
 from services.task_manager import get_task_manager
 from services.vocal_separation import (
     VocalSeparationDirectMLNotAvailable,
@@ -68,12 +74,7 @@ def _record_to_status(record: Optional[dict]) -> Optional[TaskStatusResponse]:
         return None
 
 
-@router.post("/generation", tags=["generation"])
-async def create_generation(
-    request: Request,
-    payload: GenerationRequest,
-) -> Any:
-    rid = get_request_id()
+def _validate_payload(request: Request, payload: GenerationRequest) -> Optional[JSONResponse]:
     if not payload.has_audio_ref():
         return _error_response(
             request,
@@ -123,11 +124,27 @@ async def create_generation(
                 "end_sec must be greater than start_sec",
                 stage="generation.create",
             )
+    return None
 
+
+def _dispatch_generation(
+    request: Request,
+    payload: GenerationRequest,
+    rid: str,
+    forced_model: Optional[str] = None,
+):
     service = get_generation_service()
     try:
         task_id = service.start_generation(payload, request_id=rid)
     except Wav2LipDirectMLNotAvailable as exc:
+        return _error_response(
+            request,
+            503,
+            "directml_unavailable",
+            str(exc),
+            stage="generation.create",
+        )
+    except MuseTalkDirectMLNotAvailable as exc:
         return _error_response(
             request,
             503,
@@ -168,7 +185,22 @@ async def create_generation(
             "failed to start generation",
             stage="generation.create",
         )
+    return service, task_id
 
+
+@router.post("/generation", tags=["generation"])
+async def create_generation(
+    request: Request,
+    payload: GenerationRequest,
+) -> Any:
+    rid = get_request_id()
+    err = _validate_payload(request, payload)
+    if err is not None:
+        return err
+    dispatched = _dispatch_generation(request, payload, rid)
+    if isinstance(dispatched, JSONResponse):
+        return dispatched
+    service, task_id = dispatched
     record = service.get_record(task_id)
     if record is None:
         return _error_response(
@@ -193,6 +225,60 @@ async def create_generation(
         task_id=task_id,
         status=TaskState(status_resp.status),
         message="task accepted",
+        websocket_url=f"/api/v1/generation/{task_id}/ws",
+        request_id=rid,
+    )
+
+
+@router.post("/generation/wav2lip", tags=["generation"])
+async def create_generation_wav2lip(
+    request: Request,
+    payload: GenerationRequest,
+) -> Any:
+    rid = get_request_id()
+    err = _validate_payload(request, payload)
+    if err is not None:
+        return err
+    payload_dict = payload.model_dump()
+    payload_dict["model"] = "wav2lip"
+    locked = GenerationRequest(**payload_dict)
+    dispatched = _dispatch_generation(request, locked, rid, forced_model="wav2lip")
+    if isinstance(dispatched, JSONResponse):
+        return dispatched
+    service, task_id = dispatched
+    record = service.get_record(task_id)
+    status_resp = _record_to_status(record) if record else None
+    return GenerationResponse(
+        task_id=task_id,
+        status=TaskState(status_resp.status) if status_resp else TaskState.PENDING,
+        message="wav2lip task accepted",
+        websocket_url=f"/api/v1/generation/{task_id}/ws",
+        request_id=rid,
+    )
+
+
+@router.post("/generation/musetalk", tags=["generation"])
+async def create_generation_musetalk(
+    request: Request,
+    payload: GenerationRequest,
+) -> Any:
+    rid = get_request_id()
+    err = _validate_payload(request, payload)
+    if err is not None:
+        return err
+    payload_dict = payload.model_dump()
+    payload_dict["model"] = "musetalk"
+    locked = GenerationRequest(**payload_dict)
+    dispatched = _dispatch_generation(request, locked, rid, forced_model="musetalk")
+    if isinstance(dispatched, JSONResponse):
+        return dispatched
+    service, task_id = dispatched
+    record = service.get_record(task_id)
+    status_resp = _record_to_status(record) if record else None
+    return GenerationResponse(
+        task_id=task_id,
+        status=TaskState(status_resp.status) if status_resp else TaskState.PENDING,
+        message="musetalk task accepted (step-2 deliverable — currently routes to skeleton)",
         websocket_url=f"/api/v1/generation/{task_id}/ws",
         request_id=rid,
     )
@@ -374,6 +460,121 @@ async def thumbnail_generation(request: Request, task_id: str) -> Any:
         filename=path.name,
         headers={"X-Task-Id": task_id, "X-Request-Id": get_request_id()},
     )
+
+
+@router.get("/generation/engines/status", tags=["generation"])
+async def engines_status(request: Request) -> Any:
+    service = get_generation_service()
+    status = service.engine_status()
+    payload = {
+        "engines": status,
+        "supported_models": list(SUPPORTED_MODELS),
+        "default_model": "wav2lip",
+        "cpu_fallback_enabled": False,
+        "request_id": get_request_id(),
+        "timestamp": time.time(),
+    }
+    wav2lip_ok = bool(status.get("wav2lip", {}).get("directml_ready"))
+    musetalk_ok = bool(status.get("musetalk", {}).get("directml_ready"))
+    if not wav2lip_ok and not musetalk_ok:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
+
+
+@router.post("/generation/engines/wav2lip/warmup", tags=["generation"])
+async def engine_wav2lip_warmup(request: Request) -> Any:
+    service = get_generation_service()
+    status = service.engine_status().get("wav2lip", {})
+    dml_ok = bool(status.get("directml_ready"))
+    if not dml_ok:
+        payload = {
+            "ok": False,
+            "model": "wav2lip",
+            "directml_available": False,
+            "directml_reason": status.get("directml_reason"),
+            "cpu_fallback_enabled": False,
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+    try:
+        ok = service.warmup_engine("wav2lip")
+    except Wav2LipDirectMLNotAvailable as exc:
+        payload = {
+            "ok": False,
+            "model": "wav2lip",
+            "directml_available": False,
+            "directml_reason": str(exc),
+            "cpu_fallback_enabled": False,
+            "last_error": str(exc),
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+    fresh = service.engine_status().get("wav2lip", {})
+    payload = {
+        "ok": bool(ok),
+        "model": "wav2lip",
+        "loaded": bool(fresh.get("loaded")),
+        "directml_available": dml_ok,
+        "provider_label": fresh.get("provider_label", "-"),
+        "providers": fresh.get("providers", []),
+        "last_error": fresh.get("last_error"),
+        "paths": fresh.get("paths", {}),
+        "request_id": get_request_id(),
+        "timestamp": time.time(),
+    }
+    if not ok:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
+
+
+@router.post("/generation/engines/musetalk/warmup", tags=["generation"])
+async def engine_musetalk_warmup(request: Request) -> Any:
+    service = get_generation_service()
+    status = service.engine_status().get("musetalk", {})
+    dml_ok = bool(status.get("directml_ready"))
+    if not dml_ok:
+        payload = {
+            "ok": False,
+            "model": "musetalk",
+            "directml_available": False,
+            "directml_reason": status.get("directml_reason"),
+            "cpu_fallback_enabled": False,
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+    try:
+        ok = service.warmup_engine("musetalk")
+    except MuseTalkDirectMLNotAvailable as exc:
+        payload = {
+            "ok": False,
+            "model": "musetalk",
+            "directml_available": False,
+            "directml_reason": str(exc),
+            "cpu_fallback_enabled": False,
+            "last_error": str(exc),
+            "request_id": get_request_id(),
+            "timestamp": time.time(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+    fresh = service.engine_status().get("musetalk", {})
+    payload = {
+        "ok": bool(ok),
+        "model": "musetalk",
+        "loaded": bool(fresh.get("loaded")),
+        "directml_available": dml_ok,
+        "provider_label": fresh.get("provider_label", "-"),
+        "providers": fresh.get("providers", []),
+        "last_error": fresh.get("last_error"),
+        "paths": fresh.get("paths", {}),
+        "request_id": get_request_id(),
+        "timestamp": time.time(),
+    }
+    if not ok:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @router.get("/generation/engine/status", tags=["generation"])

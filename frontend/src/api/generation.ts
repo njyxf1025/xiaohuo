@@ -2,6 +2,8 @@ import { apiClient, buildUrl } from "./client";
 
 export type AvatarType = "image" | "video" | "preset";
 
+export type GenerationModel = "wav2lip" | "musetalk";
+
 export type TaskState =
   | "pending"
   | "running"
@@ -17,6 +19,7 @@ export interface GenerationRequest {
   avatar_id?: string;
   avatar_type: AvatarType;
   preset_id?: string;
+  model?: GenerationModel;
   fps?: number;
   resize_factor?: number;
   enable_vocal_separation?: boolean;
@@ -40,6 +43,7 @@ export interface TaskStatusResponse {
   params?: Record<string, unknown> | null;
   result?: Record<string, unknown> | null;
   error?: string | null;
+  model?: GenerationModel | null;
   created_at: number;
   updated_at: number;
   request_id?: string | null;
@@ -75,10 +79,53 @@ export interface EngineStatus {
   timestamp: number;
 }
 
+export interface EngineSlot {
+  model: GenerationModel;
+  directml_ready: boolean;
+  directml_reason: string;
+  loaded: boolean;
+  provider_label: string;
+  providers: string[];
+  last_error: string | null;
+  paths: Record<string, string>;
+}
+
+export interface EnginesStatusResponse {
+  engines: {
+    wav2lip: EngineSlot;
+    musetalk: EngineSlot;
+  };
+  supported_models: GenerationModel[];
+  default_model: GenerationModel;
+  cpu_fallback_enabled: boolean;
+  request_id?: string;
+  timestamp: number;
+}
+
 export async function startGeneration(
   req: GenerationRequest,
 ): Promise<GenerationResponse> {
   const { data } = await apiClient.post<GenerationResponse>("/generation", req);
+  return data;
+}
+
+export async function startGenerationWav2Lip(
+  req: GenerationRequest,
+): Promise<GenerationResponse> {
+  const { data } = await apiClient.post<GenerationResponse>(
+    "/generation/wav2lip",
+    req,
+  );
+  return data;
+}
+
+export async function startGenerationMuseTalk(
+  req: GenerationRequest,
+): Promise<GenerationResponse> {
+  const { data } = await apiClient.post<GenerationResponse>(
+    "/generation/musetalk",
+    req,
+  );
   return data;
 }
 
@@ -103,8 +150,29 @@ export async function getEngineStatus(): Promise<EngineStatus> {
   return data;
 }
 
+export async function getEnginesStatus(): Promise<EnginesStatusResponse> {
+  const { data } = await apiClient.get<EnginesStatusResponse>(
+    "/generation/engines/status",
+  );
+  return data;
+}
+
 export async function warmupEngine(): Promise<EngineStatus> {
   const { data } = await apiClient.post<EngineStatus>("/generation/engine/warmup");
+  return data;
+}
+
+export async function warmupWav2LipEngine(): Promise<EngineSlot> {
+  const { data } = await apiClient.post<EngineSlot>(
+    "/generation/engines/wav2lip/warmup",
+  );
+  return data;
+}
+
+export async function warmupMuseTalkEngine(): Promise<EngineSlot> {
+  const { data } = await apiClient.post<EngineSlot>(
+    "/generation/engines/musetalk/warmup",
+  );
   return data;
 }
 

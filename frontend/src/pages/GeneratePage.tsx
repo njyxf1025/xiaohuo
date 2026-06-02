@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import AvatarSelector from "../components/AvatarSelector";
 import ModelInfoCard from "../components/ModelInfoCard";
+import ModelSelector from "../components/ModelSelector";
 import MusicUploader from "../components/MusicUploader";
 import ProgressPanel from "../components/ProgressPanel";
 import StepGuide from "../components/StepGuide";
@@ -11,7 +12,9 @@ import VideoPlayer from "../components/VideoPlayer";
 import WaveformPlayer from "../components/WaveformPlayer";
 import {
   getTaskDownloadUrl,
-  startGeneration,
+  startGenerationMuseTalk,
+  startGenerationWav2Lip,
+  type GenerationModel,
   type GenerationResponse,
   type TaskStatusResponse,
 } from "../api/generation";
@@ -33,6 +36,8 @@ export default function GeneratePage() {
   const avatar = useStore((s) => s.selectedAvatar);
   const currentTask = useStore((s) => s.currentTask);
   const setCurrentTask = useStore((s) => s.setCurrentTask);
+  const selectedModel = useStore((s) => s.selectedModel);
+  const setSelectedModel = useStore((s) => s.setSelectedModel);
   const enableVocalSeparation = useStore((s) => s.enableVocalSeparation);
   const setEnableVocalSeparation = useStore((s) => s.setEnableVocalSeparation);
   const enableDenoising = useStore((s) => s.enableDenoising);
@@ -101,7 +106,7 @@ export default function GeneratePage() {
     if (!currentMusic || !slice || !avatar) return;
     setStarting(true);
     try {
-      const payload: Parameters<typeof startGeneration>[0] = {
+      const payload: Omit<Parameters<typeof startGenerationWav2Lip>[0], "model"> = {
         avatar_type: avatar.kind,
         fps: 25,
         resize_factor: 1,
@@ -114,16 +119,27 @@ export default function GeneratePage() {
       } else {
         payload.avatar_id = avatar.id;
       }
-      const res: GenerationResponse = await startGeneration(payload);
+      const model = (selectedModel || "wav2lip") as GenerationModel;
+      const startFn =
+        model === "musetalk" ? startGenerationMuseTalk : startGenerationWav2Lip;
+      const res: GenerationResponse = await startFn({
+        ...payload,
+        model,
+      });
       setCurrentTask({
         taskId: res.task_id,
         status: res.status,
         progress: 0,
         stage: "pending",
         message: res.message ?? null,
+        model,
       });
       setPhase("generating");
-      toast.success("已提交生成任务");
+      toast.success(
+        model === "musetalk"
+          ? "已提交 MuseTalk 任务（Step-2 路线，当前为骨架）"
+          : "已提交 Wav2Lip 生成任务",
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -139,6 +155,7 @@ export default function GeneratePage() {
       progress: status.progress,
       stage: status.stage,
       message: status.message ?? null,
+      model: (status.model as GenerationModel | null) ?? selectedModel,
     });
     const url = getTaskDownloadUrl(status.task_id);
     setVideoUrl(url);
@@ -154,6 +171,7 @@ export default function GeneratePage() {
       progress: status.progress,
       stage: status.stage,
       message: status.message ?? null,
+      model: (status.model as GenerationModel | null) ?? selectedModel,
     });
   };
 
@@ -251,10 +269,16 @@ export default function GeneratePage() {
           <SectionHeader
             index={4}
             title="生成唇形同步视频"
-            desc="基于 Wav2Lip-ONNX + DirectML 进行唇形推理。"
+            desc="按需选择推理模型：Wav2Lip-ONNX 走 DirectML 闪电出片，MuseTalk 走 torch-directml 追求更高画质。"
           />
           <div className="space-y-4">
             <div className="card space-y-4">
+              <ModelSelector
+                value={selectedModel}
+                onChange={setSelectedModel}
+                disabled={phase === "generating" || phase === "done"}
+              />
+
               <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
                 <div className="text-sm text-slate-300">
                   {avatar ? (
@@ -282,7 +306,7 @@ export default function GeneratePage() {
                   ) : (
                     <Sparkles className="h-4 w-4" />
                   )}
-                  生成视频
+                  {selectedModel === "musetalk" ? "开始高清演唱" : "开始演唱"}
                 </button>
               </div>
 
@@ -309,7 +333,7 @@ export default function GeneratePage() {
                       </div>
                       <div className="mt-1 text-xs leading-relaxed text-slate-400">
                         上传带重低音伴奏的歌曲时，开启后先用 ONNX
-                        人声分离模型把纯人声送进 Wav2Lip，唇形不再因伴奏震动而
+                        人声分离模型把纯人声送进唇形推理，唇形不再因伴奏震动而
                         抖动；最终视频再把人声与伴奏缝合，听感保持完整。
                         若未安装分离模型，会自动回退到原始音频。
                       </div>
@@ -364,7 +388,7 @@ export default function GeneratePage() {
         <SectionHeader
           index={0}
           title="关于模型"
-          desc="Wav2Lip-ONNX 是本项目唯一的推理模型。"
+          desc="前端提供 Wav2Lip-ONNX 与 MuseTalk 两条推理路径，统一在 DirectML 上跑。"
         />
         <ModelInfoCard />
       </section>

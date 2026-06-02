@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+import type { GenerationModel } from "../api/generation";
 import type { ChorusSegment } from "../api/music";
 
 export type AvatarKind = "preset" | "image" | "video";
@@ -34,6 +35,7 @@ export interface CurrentTask {
   progress: number;
   stage: string;
   message?: string | null;
+  model?: GenerationModel | null;
 }
 
 interface AppState {
@@ -42,6 +44,7 @@ interface AppState {
   slice: SliceInfo | null;
   selectedAvatar: SelectedAvatar | null;
   currentTask: CurrentTask | null;
+  selectedModel: GenerationModel;
   enableVocalSeparation: boolean;
   enableDenoising: boolean;
   setCurrentMusic: (m: CurrentMusic | null) => void;
@@ -49,6 +52,7 @@ interface AppState {
   setSlice: (s: SliceInfo | null) => void;
   setSelectedAvatar: (a: SelectedAvatar | null) => void;
   setCurrentTask: (t: CurrentTask | null) => void;
+  setSelectedModel: (m: GenerationModel) => void;
   setEnableVocalSeparation: (v: boolean) => void;
   setEnableDenoising: (v: boolean) => void;
   reset: () => void;
@@ -62,6 +66,7 @@ export const useStore = create<AppState>()(
       slice: null,
       selectedAvatar: null,
       currentTask: null,
+      selectedModel: "wav2lip",
       enableVocalSeparation: true,
       enableDenoising: false,
       setCurrentMusic: (m) =>
@@ -76,6 +81,7 @@ export const useStore = create<AppState>()(
       setSlice: (s) => set({ slice: s }),
       setSelectedAvatar: (a) => set({ selectedAvatar: a }),
       setCurrentTask: (t) => set({ currentTask: t }),
+      setSelectedModel: (m) => set({ selectedModel: m }),
       setEnableVocalSeparation: (v) => set({ enableVocalSeparation: v }),
       setEnableDenoising: (v) => set({ enableDenoising: v }),
       reset: () =>
@@ -85,6 +91,7 @@ export const useStore = create<AppState>()(
           slice: null,
           selectedAvatar: null,
           currentTask: null,
+          selectedModel: "wav2lip",
           enableVocalSeparation: true,
           enableDenoising: false,
         }),
@@ -97,6 +104,7 @@ export const useStore = create<AppState>()(
         currentMusic: state.currentMusic,
         selectedSegment: state.selectedSegment,
         slice: state.slice,
+        selectedModel: state.selectedModel,
         enableVocalSeparation: state.enableVocalSeparation,
         enableDenoising: state.enableDenoising,
       }),

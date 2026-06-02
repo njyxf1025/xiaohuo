@@ -11,14 +11,20 @@ from typing import Any, Dict, List, Optional, Tuple
 from core.config import get_settings
 from core.logging import get_logger
 from core.request_id import get_request_id
-from models.generation_schemas import GenerationRequest, TaskState
+from models.generation_schemas import GenerationModel, GenerationRequest, TaskState
 from services.avatar_service import AvatarService, get_avatar_service
 from services.music_service import get_music_service
+from services.musetalk_engine import (
+    MuseTalkDirectMLNotAvailable,
+    MuseTalkEngine,
+    MuseTalkModelNotLoaded,
+    MuseTalkNotImplemented,
+)
 from services.task_manager import TaskCancelled, TaskManager, get_task_manager
 from services.wav2lip_engine import (
     DEFAULT_FPS,
     DEFAULT_RESIZE_FACTOR,
-    Wav2LipDirectMLNotAvailable,
+    Wav2LipEngine,
 )
 from services.wav2lip_pipeline import PipelineRequest, run_pipeline
 from utils import files as file_utils
@@ -169,34 +175,30 @@ class GenerationService:
     ) -> str:
         manager = get_task_manager()
         rid = request_id or get_request_id()
+        model = _resolve_model_name(params.model)
         params_dict = params.model_dump()
-        task_id = manager.create_task(params=params_dict, request_id=rid)
+        task_id = manager.create_task(params=params_dict, request_id=rid, model=model)
 
-        try:
-            from services.wav2lip_engine import Wav2LipEngine
-            engine = Wav2LipEngine.instance()
-            dml_ok, dml_reason = engine.is_directml_ready()
-            if not dml_ok:
-                err = (
-                    f"DirectML unavailable: {dml_reason}. "
-                    "Install onnxruntime-directml and ensure a DirectML-capable GPU is present. "
-                    "CPU fallback has been disabled because inference would be unusable."
-                )
-                _logger.error(
-                    "refusing to start generation: DirectML unavailable",
-                    extra={
-                        "stage": "generation.start",
-                        "task_id": task_id,
-                        "reason": dml_reason,
-                        "err_message": err,
-                        "error_code": "directml_unavailable",
-                    },
-                )
-                manager.fail_task(task_id, err)
-                return task_id
-        except Exception as exc:
-            _logger.exception("DirectML probe failed at start_generation: %s", exc)
-            manager.fail_task(task_id, f"DirectML probe failed: {exc}")
+        dml_ok, dml_reason, dml_engine_label = _probe_directml_for_model(model)
+        if not dml_ok:
+            err = (
+                f"DirectML unavailable for model '{model}': {dml_reason}. "
+                "Install the matching provider (onnxruntime-directml for wav2lip, "
+                "torch-directml for musetalk) and ensure a DirectML-capable GPU is present. "
+                "CPU fallback has been disabled because inference would be unusable."
+            )
+            _logger.error(
+                "refusing to start generation: DirectML unavailable",
+                extra={
+                    "stage": "generation.start",
+                    "task_id": task_id,
+                    "task_model": model,
+                    "reason": dml_reason,
+                    "err_message": err,
+                    "error_code": "directml_unavailable",
+                },
+            )
+            manager.fail_task(task_id, err)
             return task_id
 
         try:
@@ -212,7 +214,7 @@ class GenerationService:
         if loop is None:
             thread = threading.Thread(
                 target=self._sync_run_generation,
-                args=(task_id, params, resolved, rid),
+                args=(task_id, params, resolved, rid, model),
                 daemon=True,
             )
             thread.start()
@@ -220,7 +222,7 @@ class GenerationService:
                 self._bg_tasks[task_id] = thread
         else:
             task = loop.create_task(
-                self._async_run_generation(task_id, params, resolved, rid)
+                self._async_run_generation(task_id, params, resolved, rid, model)
             )
             with self._lock:
                 self._bg_tasks[task_id] = task
@@ -232,6 +234,7 @@ class GenerationService:
         params: GenerationRequest,
         resolved: ResolvedSources,
         request_id: Optional[str],
+        model: str,
     ) -> None:
         try:
             await asyncio.to_thread(
@@ -240,6 +243,7 @@ class GenerationService:
                 params,
                 resolved,
                 request_id,
+                model,
             )
         except Exception as exc:
             manager = get_task_manager()
@@ -252,9 +256,10 @@ class GenerationService:
         params: GenerationRequest,
         resolved: ResolvedSources,
         request_id: Optional[str],
+        model: str,
     ) -> None:
         try:
-            self._run_generation_blocking(task_id, params, resolved, request_id)
+            self._run_generation_blocking(task_id, params, resolved, request_id, model)
         except Exception as exc:
             manager = get_task_manager()
             manager.fail_task(task_id, f"pipeline crashed: {exc}")
@@ -266,6 +271,7 @@ class GenerationService:
         params: GenerationRequest,
         resolved: ResolvedSources,
         request_id: Optional[str],
+        model: str,
     ) -> None:
         manager = get_task_manager()
         cb = manager.make_callback(task_id)
@@ -273,6 +279,32 @@ class GenerationService:
             cb("queued", 2.0, "task picked up")
         except TaskCancelled:
             return
+        if model == GenerationModel.musetalk.value:
+            self._run_musetalk_blocking(
+                task_id=task_id,
+                params=params,
+                resolved=resolved,
+                request_id=request_id,
+                cb=cb,
+            )
+            return
+        self._run_wav2lip_blocking(
+            task_id=task_id,
+            params=params,
+            resolved=resolved,
+            request_id=request_id,
+            cb=cb,
+        )
+
+    def _run_wav2lip_blocking(
+        self,
+        task_id: str,
+        params: GenerationRequest,
+        resolved: ResolvedSources,
+        request_id: Optional[str],
+        cb,
+    ) -> None:
+        manager = get_task_manager()
         fps = int(params.fps or DEFAULT_FPS)
         resize = float(params.resize_factor or DEFAULT_RESIZE_FACTOR)
         enable_vs = bool(getattr(params, "enable_vocal_separation", True))
@@ -294,10 +326,11 @@ class GenerationService:
         )
         manager.update_progress(task_id, 12.0, "vocal_separation", "audio preprocessing")
         _logger.info(
-            "starting generation",
+            "starting wav2lip generation",
             extra={
                 "stage": "generation.start_pipeline",
                 "task_id": task_id,
+                "task_model": "wav2lip",
                 "fps": fps,
                 "resize_factor": resize,
                 "enable_vocal_separation": enable_vs,
@@ -309,10 +342,11 @@ class GenerationService:
             tb = traceback.format_exc(limit=4)
             err = f"{type(exc).__name__}: {exc}"
             _logger.error(
-                "generation failed",
+                "wav2lip generation failed",
                 extra={
                     "stage": "generation.run",
                     "task_id": task_id,
+                    "task_model": "wav2lip",
                     "err_message": err,
                     "trace": tb[-400:],
                 },
@@ -334,19 +368,113 @@ class GenerationService:
             "accompaniment_path": (
                 str(result.accompaniment_path) if result.accompaniment_path else None
             ),
+            "model": "wav2lip",
             "request_id": request_id,
         }
         manager.complete_task(task_id, result_payload)
         _logger.info(
-            "generation completed",
+            "wav2lip generation completed",
             extra={
                 "stage": "generation.complete",
                 "task_id": task_id,
+                "task_model": "wav2lip",
                 "output": str(result.output_path),
                 "num_frames": int(result.num_frames),
                 "duration_sec": round(result.duration_sec, 3),
             },
         )
+
+    def _run_musetalk_blocking(
+        self,
+        task_id: str,
+        params: GenerationRequest,
+        resolved: ResolvedSources,
+        request_id: Optional[str],
+        cb,
+    ) -> None:
+        manager = get_task_manager()
+        try:
+            cb("musetalk.init", 5.0, "initializing MuseTalk engine (torch-directml)")
+        except TaskCancelled:
+            return
+        engine = MuseTalkEngine.instance()
+        try:
+            ok = engine.warmup()
+        except MuseTalkDirectMLNotAvailable as exc:
+            _logger.error(
+                "musetalk warmup aborted: DirectML unavailable (%s)", exc,
+                extra={
+                    "stage": "musetalk.warmup",
+                    "task_id": task_id,
+                    "err_message": str(exc),
+                    "error_code": "directml_unavailable",
+                },
+            )
+            manager.fail_task(task_id, f"directml_unavailable: {exc}")
+            return
+        except Exception as exc:
+            _logger.exception("musetalk warmup crashed: %s", exc)
+            manager.fail_task(task_id, f"musetalk warmup crashed: {exc}")
+            return
+        if not ok:
+            last = engine.last_error() or "unknown"
+            if "directml" in last.lower() or "torch" in last.lower():
+                manager.fail_task(task_id, f"directml_unavailable: {last}")
+                return
+            manager.fail_task(task_id, f"musetalk weights not loaded: {last}")
+            return
+        try:
+            cb("musetalk.ready", 15.0, "MuseTalk engine ready on DirectML")
+        except TaskCancelled:
+            return
+        try:
+            cb("musetalk.infer", 30.0, "MuseTalk inference — step 2 deliverable not yet implemented")
+        except TaskCancelled:
+            return
+        manager.fail_task(
+            task_id,
+            "musetalk not implemented: step-2 deliverable. Wav2Lip-ONNX is the active engine.",
+        )
+
+    def engine_status(self) -> Dict[str, Any]:
+        wav2lip_engine = _safe_engine_status(
+            model="wav2lip",
+            loader=lambda: Wav2LipEngine.instance().is_directml_ready(),
+            loaded=lambda: Wav2LipEngine.instance().is_loaded(),
+            last_error=lambda: Wav2LipEngine.instance().last_error(),
+            paths=lambda: Wav2LipEngine.instance().model_paths(),
+            provider_label=lambda: Wav2LipEngine.instance().provider_label(),
+            providers=lambda: Wav2LipEngine.instance().providers(),
+        )
+        musetalk_engine = _safe_engine_status(
+            model="musetalk",
+            loader=lambda: MuseTalkEngine.instance().is_directml_ready(),
+            loaded=lambda: MuseTalkEngine.instance().is_loaded(),
+            last_error=lambda: MuseTalkEngine.instance().last_error(),
+            paths=lambda: MuseTalkEngine.instance().model_paths(),
+            provider_label=lambda: MuseTalkEngine.instance().provider_label(),
+            providers=lambda: MuseTalkEngine.instance().providers(),
+        )
+        return {
+            "wav2lip": wav2lip_engine,
+            "musetalk": musetalk_engine,
+        }
+
+    def warmup_engine(self, model: str) -> bool:
+        m = _resolve_model_name(model)
+        if m == "wav2lip":
+            try:
+                return Wav2LipEngine.instance().warmup()
+            except Exception as exc:
+                _logger.exception("wav2lip warmup crashed: %s", exc)
+                return False
+        if m == "musetalk":
+            try:
+                return MuseTalkEngine.instance().warmup()
+            except Exception as exc:
+                _logger.exception("musetalk warmup crashed: %s", exc)
+                return False
+        return False
 
     def cancel(self, task_id: str) -> bool:
         manager = get_task_manager()
@@ -362,6 +490,102 @@ class GenerationService:
     def list_records(self, limit: int = 50) -> List[Dict[str, Any]]:
         manager = get_task_manager()
         return [manager.to_response(r) for r in manager.list_tasks(limit=limit)]
+
+
+SUPPORTED_MODELS: Tuple[str, ...] = ("wav2lip", "musetalk")
+
+
+def _resolve_model_name(value: Any) -> str:
+    if value is None:
+        return "wav2lip"
+    try:
+        v = str(getattr(value, "value", value)).strip().lower()
+    except Exception:
+        v = "wav2lip"
+    if v in SUPPORTED_MODELS:
+        return v
+    if v in ("wav2lip_onnx", "wav2lip-onnx", "wav2lip_hq"):
+        return "wav2lip"
+    if v in ("muse", "muse_talk", "muse-talk"):
+        return "musetalk"
+    return "wav2lip"
+
+
+def _probe_directml_for_model(model: str) -> Tuple[bool, str, str]:
+    if model == "wav2lip":
+        try:
+            from services.wav2lip_engine import Wav2LipEngine
+
+            ok, reason = Wav2LipEngine.instance().is_directml_ready()
+            return (ok, reason, "onnxruntime-directml")
+        except Exception as exc:
+            return (False, f"wav2lip dml probe crashed: {exc}", "onnxruntime-directml")
+    if model == "musetalk":
+        try:
+            from core.torch_provider import is_torch_directml_available
+
+            ok, reason = is_torch_directml_available()
+            return (ok, reason, "torch-directml")
+        except Exception as exc:
+            return (False, f"musetalk dml probe crashed: {exc}", "torch-directml")
+    return (False, f"unknown model '{model}'", "-")
+
+
+def _safe_engine_status(
+    model: str,
+    loader,
+    loaded,
+    last_error,
+    paths,
+    provider_label,
+    providers,
+) -> Dict[str, Any]:
+    try:
+        dml_ok, dml_reason = loader()
+    except Exception as exc:
+        dml_ok, dml_reason = False, f"probe crashed: {exc}"
+    try:
+        is_loaded = loaded() if callable(loaded) else False
+    except Exception:
+        is_loaded = False
+    try:
+        last = last_error() if callable(last_error) else None
+    except Exception:
+        last = None
+    try:
+        ps = paths() if callable(paths) else None
+    except Exception:
+        ps = None
+    try:
+        label = provider_label() if callable(provider_label) else "-"
+    except Exception:
+        label = "-"
+    try:
+        prov_list = providers() if callable(providers) else []
+    except Exception:
+        prov_list = []
+    out_paths: Dict[str, Any] = {}
+    if ps is not None:
+        if hasattr(ps, "wav2lip_path") or hasattr(ps, "model_path"):
+            out_paths["model"] = str(
+                getattr(ps, "wav2lip_path", None) or getattr(ps, "model_path", None) or ""
+            )
+        if hasattr(ps, "face_detect_path"):
+            out_paths["face_detect"] = str(getattr(ps, "face_detect_path", None) or "")
+        if hasattr(ps, "config_path"):
+            out_paths["config"] = str(getattr(ps, "config_path", None) or "")
+        if hasattr(ps, "hubert_path"):
+            out_paths["hubert"] = str(getattr(ps, "hubert_path", None) or "")
+    return {
+        "model": model,
+        "directml_ready": bool(dml_ok),
+        "directml_reason": dml_reason,
+        "loaded": bool(is_loaded),
+        "provider_label": label or "-",
+        "providers": prov_list or [],
+        "last_error": last,
+        "paths": out_paths,
+    }
 
 
 _service: Optional[GenerationService] = None

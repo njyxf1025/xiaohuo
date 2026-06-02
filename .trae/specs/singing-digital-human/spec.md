@@ -206,3 +206,90 @@
 - **API**：`POST /api/v1/music/{music_id}/detect-chorus` + 上传后异步调度，返回 `chorus: { start_sec, end_sec, confidence }`
 - **前端**：[frontend/src/components/WaveformPlayer.tsx](file:///workspace/frontend/src/components/WaveformPlayer.tsx) — Wavesurfer.js 7 渲染 peaks、两个 pointer-event 手柄拖拽调整、`onChange({start,end})` 回调
 - **协作流**：上传 → 后端自动检测 → 前端把推荐区间画在波形上 → 用户拖拽微调 → 点击确认触发截取 API
+
+## 多模型推理架构（Wav2Lip-ONNX + MuseTalk）
+
+> 在保留 Wav2Lip-ONNX 作为默认 / 闪电生成路径的基础上，**新增 MuseTalk 作为高画质可选路径**，统一在 FastAPI 后面暴露两条独立路由，前端用一个统一的 `ModelSelector` 组件做单点切换。两条路径共用同一份 DirectML 严格策略（**无 CPU 降级**），由前端与后端各自的 `GenerationModel` 枚举同步。
+
+### 架构图
+
+```
+                    ┌─── [前端统一控制台] (React + Vite + Tailwind) ───┐
+                    │                                                  │
+         (用户选 Wav2Lip 闪电生成)                            (用户选 MuseTalk 高清细节)
+                    │                                                  │
+                    ▼                                                  ▼
+      POST /api/v1/generation/wav2lip             POST /api/v1/generation/musetalk
+                    │                                                  │
+          ┌─────────┴─────────┐                              ┌─────────┴─────────┐
+          │ Wav2Lip-ONNX 引擎  │                              │   MuseTalk 引擎    │
+          │ (ONNXRuntime-DML)  │                              │ (PyTorch-DirectML) │
+          └─────────┬─────────┘                              └─────────┬─────────┘
+                    │                                                  │
+                    └───────────► [ 共享硬件：AMD 6700XT ] ◄──────────┘
+```
+
+> 兼容路由 `POST /api/v1/generation` 仍可接收 `model: "wav2lip" | "musetalk"`，效果与两条专用路由一致。
+
+### 落地三步走（明确写在 spec 里，避免一上来同时搞两个）
+
+1. **第一步（已落地 · Wav2Lip 核心流程）**
+   - 拉取 wav2lip-onnx 源码 + FastAPI 封装
+   - 前端 4 步引导：上传 → 选高潮 → 选形象 → 生成
+   - 验证 AMD 6700XT 驱动 + onnxruntime-directml 整条管线
+2. **第二步（已部分落地 · MuseTalk 骨架 + 路由）**
+   - 后端实现 [services/musetalk_engine.py](file:///workspace/backend/services/musetalk_engine.py) 单例 + DirectML 严苛策略 + 权重发现
+   - 新增 `POST /api/v1/generation/musetalk` 路由，**目前返回 `code="not_implemented"` 状态**，等待推理图实现
+   - 前端 `ModelSelector` 仍允许选 MuseTalk，但会在卡片上展示「Step-2 路线」徽标与 torch-directml 状态
+3. **第三步（未来 · 完整整合）**
+   - 把 MuseTalk 真实推理图接入 `MuseTalkEngine.generate`
+   - 移除 `MuseTalkNotImplemented` 抛出；前端卡片升级为「可点击 + 实测对比」
+   - 进一步加语音克隆、背景替换等 Linly-Talker 风格能力
+
+### Requirement: 多模型推理调度（Dispatch by model）
+
+系统 SHALL 在同一个 `GenerationService` 内根据请求的 `model` 字段把任务派发到对应的引擎，并对外暴露两条专用路由 + 一条兼容路由。
+
+#### Scenario: 默认走 Wav2Lip
+- **WHEN** 前端未指定 `model` 或传 `model="wav2lip"`
+- **THEN** `GenerationService` 派发到 `Wav2LipEngine`；调用链路为 `core/onnx_provider` → `services/wav2lip_engine` → `services/wav2lip_pipeline`；结果里 `model="wav2lip"`
+
+#### Scenario: 显式选择 MuseTalk
+- **WHEN** 前端调用 `POST /api/v1/generation/musetalk` 或 `POST /api/v1/generation` 且 `model="musetalk"`
+- **THEN** `GenerationService` 派发到 `MuseTalkEngine`；当前实现做 `warmup` + DirectML 严苛校验，然后因 `MuseTalkNotImplemented` 失败；task 进入 `failed` 状态 `error="musetalk not implemented: step-2 deliverable. Wav2Lip-ONNX is the active engine."`
+
+#### Scenario: 专用路由与兼容路由
+- **WHEN** 任意引擎被选择
+- **THEN** `POST /api/v1/generation/wav2lip` 与 `POST /api/v1/generation/musetalk` 内部会强制覆盖 `payload.model` 后再走统一派发；`POST /api/v1/generation` 仅信任客户端传上来的 `model`，无值时回退到 `wav2lip`
+
+### Requirement: 引擎状态端点（同时汇报两个引擎）
+
+系统 SHALL 提供 `GET /api/v1/generation/engines/status` 端点，同时返回 `wav2lip` 与 `musetalk` 的 DirectML 就绪状态、provider 标签、加载状态、最近一次错误、权重路径；并提供 `POST /api/v1/generation/engines/wav2lip/warmup` 与 `POST /api/v1/generation/engines/musetalk/warmup` 两条独立预热端点。
+
+#### Scenario: 至少一个引擎可用
+- **WHEN** `wav2lip.directml_ready=true` 或 `musetalk.directml_ready=true`
+- **THEN** `GET /api/v1/generation/engines/status` 返回 200 + `engines.{wav2lip,musetalk}` 完整结构
+
+#### Scenario: 两个引擎都不可用
+- **WHEN** 两条路径的 DirectML probe 都失败
+- **THEN** 端点返回 503，但 payload 仍包含两个引擎的失败原因，方便用户排查
+
+### Requirement: 引擎严苛策略（MuseTalk 同样不降级 CPU）
+
+MuseTalk 引擎 SHALL 沿用 Wav2Lip 引擎的「DirectML 唯一 + 拒绝 CPU 降级」策略。原因：PyTorch 在 CPU 上跑扩散 UNet 慢到无法使用，与 Wav2Lip 的 CPU 不可用情况同源。
+
+#### Scenario: torch-directml 不可用
+- **WHEN** `torch-directml` 未安装或 `torch_directml.device_count() == 0`
+- **THEN** `MuseTalkEngine.warmup()` 在 `is_torch_directml_available()` 阶段立刻返回 False，`last_error` 含 `directml_unavailable: ...`；提交任务到 `/generation/musetalk` 会被 `_probe_directml_for_model("musetalk")` 在派发前直接 fail_task，错误码 `directml_unavailable`
+
+### Requirement: 前端模型选择 UI
+
+系统 SHALL 提供 `ModelSelector` 组件，在 GeneratePage 第 4 步以两张并排卡片（闪电 / 高清）让用户做单选；选择结果通过 Zustand `selectedModel` 持久化到 localStorage，刷新页面后仍保留。
+
+#### Scenario: 切换推理模型
+- **WHEN** 用户点击 MuseTalk 卡片
+- **THEN** `useStore.setSelectedModel("musetalk")` 触发；`ModelInfoCard` 高亮更新；`useStore.reset()` 时回到 `wav2lip`
+
+#### Scenario: MuseTalk 端 DirectML 缺失提示
+- **WHEN** `/api/v1/generation/engines/status` 返回 `engines.musetalk.directml_ready=false`
+- **THEN** MuseTalk 卡片在 `ModelSelector` 内显示「torch-directml 未就绪」警告，但用户仍可点击（提交后会被后端 503 拒绝，方便演示整套严格策略）

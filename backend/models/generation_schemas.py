@@ -24,6 +24,11 @@ class SliceRef(BaseModel):
     end_sec: Optional[float] = Field(default=None, ge=0.0, description="End second when not using a stored slice.")
 
 
+class GenerationModel(str, Enum):
+    wav2lip = "wav2lip"
+    musetalk = "musetalk"
+
+
 class GenerationRequest(BaseModel):
     music_id: Optional[str] = Field(default=None, description="Source music id (when not using a stored slice).")
     slice_id: Optional[str] = Field(default=None, description="Stored audio slice id (preferred).")
@@ -32,13 +37,20 @@ class GenerationRequest(BaseModel):
     avatar_id: Optional[str] = Field(default=None, description="Custom avatar id (image or video).")
     avatar_type: AvatarType = Field(default="image", description="Avatar source type.")
     preset_id: Optional[str] = Field(default=None, description="Preset avatar id when avatar_type=preset.")
+    model: GenerationModel = Field(
+        default=GenerationModel.wav2lip,
+        description=(
+            "Lip-sync model. 'wav2lip' = Wav2Lip-ONNX on DirectML (fast, default). "
+            "'musetalk' = MuseTalk on torch-directml (step-2 deliverable, higher quality, slower)."
+        ),
+    )
     fps: Optional[int] = Field(default=25, ge=1, le=60, description="Output video fps.")
     resize_factor: Optional[float] = Field(default=1.0, ge=0.1, le=4.0, description="Down/up scale of output frames.")
     enable_vocal_separation: Optional[bool] = Field(
         default=True,
         description=(
             "Run ONNX vocal/accompaniment separation on DirectML before lip-sync. "
-            "When enabled, the vocals drive lip-sync and the accompaniment is re-mixed into the final video."
+            "Applies to Wav2Lip-ONNX now; will be reused by MuseTalk once step 2 lands."
         ),
     )
     enable_denoising: Optional[bool] = Field(

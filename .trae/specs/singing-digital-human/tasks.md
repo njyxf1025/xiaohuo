@@ -41,6 +41,21 @@
   - [x] SubTask 5b.7: 进度面板新增「人声分离（DirectML）」阶段；ModelInfoCard 补「人声分离 + 伴奏重混」feature
   - [x] SubTask 5b.8: 软失败：分离模型未安装时 WARN 降级到原始音频（不阻塞任务）
 
+- [x] Task 5c: 多模型推理调度（Wav2Lip-ONNX + MuseTalk，step-1/step-2 分阶段交付）
+  - [x] SubTask 5c.1: 创建 `models/musetalk/` 目录与 README（说明支持的权重候选：musetalk.safetensors / musetalk.onnx / musetalk.pt / MuseTalk.safetensors / musetalk_fp16.safetensors / musetalk_fp32.safetensors + config.yaml / hubert.pt 等辅助权重）
+  - [x] SubTask 5c.2: 实现 `core/torch_provider.py`：torch / torch-directml 探测，`TorchDirectMLNotAvailable` 异常，**与 Wav2Lip 同款的「无 CPU 降级」严苛策略**
+  - [x] SubTask 5c.3: 实现 `services/musetalk_engine.py`：`MuseTalkEngine` 单例，warmup 阶段做 DirectML 严苛校验，权重发现，定义 `MuseTalkNotImplemented`（step-2 真实推理图的占位异常）
+  - [x] SubTask 5c.4: 更新 `models/generation_schemas.py`：新增 `GenerationModel` 枚举（`wav2lip` / `musetalk`），`GenerationRequest.model` 默认 `wav2lip`
+  - [x] SubTask 5c.5: `services/task_manager.py`：`TaskRecord` 新增 `model` 字段（默认 `wav2lip`），`create_task(..., model=)` 持久化，`to_response` 暴露给前端
+  - [x] SubTask 5c.6: `services/generation_service.py`：派发逻辑拆分为 `_run_wav2lip_blocking` / `_run_musetalk_blocking`；新增 `engine_status()` 与 `warmup_engine(model)` 助手
+  - [x] SubTask 5c.7: `api/generation.py`：新增 `POST /api/v1/generation/wav2lip` 与 `POST /api/v1/generation/musetalk` 两条专用路由（内部强制覆盖 `payload.model`）；新增 `GET /api/v1/generation/engines/status`、`POST /api/v1/generation/engines/wav2lip/warmup`、`POST /api/v1/generation/engines/musetalk/warmup`
+  - [x] SubTask 5c.8: 前端 `api/generation.ts`：新增 `startGenerationWav2Lip` / `startGenerationMuseTalk` / `getEnginesStatus` / `warmupWav2LipEngine` / `warmupMuseTalkEngine`，以及 `GenerationModel` / `EngineSlot` / `EnginesStatusResponse` 类型
+  - [x] SubTask 5c.9: 前端 `store/useStore.ts`：`selectedModel` 持久化到 localStorage（与 `selectedAvatar` 同款）
+  - [x] SubTask 5c.10: 前端 `components/ModelSelector.tsx`：双卡片 UI（闪电生成 / 高清细节），读 `engines.status` 显示每条路径 DirectML 就绪状态，MuseTalk 缺失 torch-directml 时显示「torch-directml 未就绪」警告
+  - [x] SubTask 5c.11: 前端 `pages/GeneratePage.tsx`：在第 4 步插入 `ModelSelector`；提交时按 `selectedModel` 路由到 `startGenerationWav2Lip` / `startGenerationMuseTalk`
+  - [x] SubTask 5c.12: 前端 `components/ModelInfoCard.tsx`：重做为左右双栏，分别介绍 Wav2Lip-ONNX 与 MuseTalk，强调共用 DirectML 严苛策略
+  - [x] SubTask 5c.13: 文档：`spec.md` 增加「多模型推理架构」段落，`tasks.md` 记录本任务，`checklist.md` 增加对应验证项
+
 - [x] Task 6: 视频生成 API 与结果管理
   - [x] SubTask 6.1: 实现视频生成 API（POST /api/generate，含参数校验）
   - [x] SubTask 6.2: 实现生成任务状态查询 API（进度、结果、错误信息）

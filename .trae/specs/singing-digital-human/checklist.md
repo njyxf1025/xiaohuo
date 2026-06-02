@@ -41,6 +41,22 @@
 - [x] 进度面板新增「人声分离（DirectML）」阶段
 - [x] ModelInfoCard 补「人声分离 + 伴奏重混」feature 卡
 
+## 多模型推理（Wav2Lip-ONNX + MuseTalk）
+- [x] `models/musetalk/` 目录与 README 已创建（说明 musetalk.safetensors / musetalk.onnx / MuseTalk.safetensors 等权重候选 + config/hubert 辅助）
+- [x] `core/torch_provider.py` 实现 `is_torch_directml_available()` 与 `TorchDirectMLNotAvailable`（与 onnx_provider 同款「无 CPU 降级」）
+- [x] `services/musetalk_engine.py` 单例 + DirectML 严苛 warmup + 权重发现 + `MuseTalkNotImplemented` 异常
+- [x] `models/generation_schemas.py` 新增 `GenerationModel` 枚举（`wav2lip` / `musetalk`），`GenerationRequest.model` 默认 `wav2lip`
+- [x] `services/task_manager.py`：`TaskRecord` 新增 `model` 字段；`create_task(..., model=)` 持久化；`to_response` 暴露给前端
+- [x] `services/generation_service.py`：派发逻辑拆为 `_run_wav2lip_blocking` / `_run_musetalk_blocking`；新增 `engine_status()` 与 `warmup_engine(model)`
+- [x] API 新增 `POST /api/v1/generation/wav2lip` / `POST /api/v1/generation/musetalk` 两条专用路由（内部强制覆盖 model）
+- [x] API 新增 `GET /api/v1/generation/engines/status` 联合汇报两个引擎
+- [x] API 新增 `POST /api/v1/generation/engines/wav2lip/warmup` / `POST /api/v1/generation/engines/musetalk/warmup` 独立预热
+- [x] 前端 `api/generation.ts` 新增 `startGenerationWav2Lip` / `startGenerationMuseTalk` / `getEnginesStatus` / `warmupWav2LipEngine` / `warmupMuseTalkEngine` 与对应类型
+- [x] 前端 `store/useStore.ts` `selectedModel` 持久化到 localStorage
+- [x] 前端 `components/ModelSelector.tsx`：双卡片 UI（闪电生成 / 高清细节），按引擎状态显示 DirectML 就绪徽标与 MuseTalk 「torch-directml 未就绪」警告
+- [x] 前端 `pages/GeneratePage.tsx`：第 4 步插入 `ModelSelector`；按 `selectedModel` 路由到对应 `startGeneration*` 函数
+- [x] 前端 `components/ModelInfoCard.tsx`：重做为左右双栏，分别介绍 Wav2Lip-ONNX 与 MuseTalk
+
 ## 调度与 API
 - [x] 视频生成 API（POST /api/generate）参数校验完整，返回任务 ID，支持进度查询
 - [ ] 生成结果视频可正常播放和下载 — Note: needs actual generation with weights; cannot be exercised in this CI environment.
@@ -68,12 +84,14 @@
 
 - **Date**: 2026-06-02
 - **Environment**: Linux sandbox, Python 3.14.4, Node.js / Vite 5.4.21
-- **Backend pytest**: 5/5 tests passed in 0.59s (test_create_app_imports, test_health_endpoint, test_system_info_endpoint, test_mounted_routes_present, test_root_endpoint). Only deprecation warnings (FastAPI `on_event`, `pythonjsonlogger` import path, starlette/httpx).
-- **Backend import smoke**: `HEALTH_OK`. Mounted routes include `/`, `/api/v1/health`, `/api/v1/system/info`, `/api/v1/music/upload`, `/api/v1/music/{music_id}`, `/api/v1/music/{music_id}/detect-chorus`, `/api/v1/music/{music_id}/slice`, `/api/v1/music/{music_id}/waveform`, `/api/v1/music/{music_id}/download`, `/api/v1/music/slice/{slice_id}/download`, `/api/v1/avatars`, `/api/v1/avatars/upload`, `/api/v1/avatars/presets`, `/api/v1/avatars/{avatar_id}` (GET + DELETE), `/api/v1/avatars/{avatar_id}/file|thumbnail`, `/api/v1/avatars/presets/{preset_id}/file|thumbnail`, `/api/v1/generation` (GET + POST), `/api/v1/generation/{task_id}` (GET + DELETE), `/api/v1/generation/{task_id}/download|thumbnail`, `/api/v1/generation/engine/status|warmup`, plus FastAPI docs (`/docs`, `/openapi.json`, `/redoc`).
+- **Backend pytest**: 6/6 tests passed in 0.71s (test_create_app_imports, test_health_endpoint, test_system_info_endpoint, test_engine_status_endpoint, test_mounted_routes_present, test_root_endpoint). Only deprecation warnings (FastAPI `on_event`, `pythonjsonlogger` import path, starlette/httpx).
+- **Backend import smoke**: `HEALTH_OK`. Mounted routes include `/`, `/api/v1/health`, `/api/v1/system/info`, `/api/v1/music/upload`, `/api/v1/music/{music_id}`, `/api/v1/music/{music_id}/detect-chorus`, `/api/v1/music/{music_id}/slice`, `/api/v1/music/{music_id}/waveform`, `/api/v1/music/{music_id}/download`, `/api/v1/music/slice/{slice_id}/download`, `/api/v1/avatars`, `/api/v1/avatars/upload`, `/api/v1/avatars/presets`, `/api/v1/avatars/{avatar_id}` (GET + DELETE), `/api/v1/avatars/{avatar_id}/file|thumbnail`, `/api/v1/avatars/presets/{preset_id}/file|thumbnail`, `/api/v1/generation` (GET + POST), `/api/v1/generation/wav2lip` (POST), `/api/v1/generation/musetalk` (POST), `/api/v1/generation/{task_id}` (GET + DELETE), `/api/v1/generation/{task_id}/download|thumbnail`, `/api/v1/generation/engine/status|warmup`, `/api/v1/generation/engines/status`, `/api/v1/generation/engines/wav2lip/warmup`, `/api/v1/generation/engines/musetalk/warmup`, `/api/v1/generation/vocal_separation/warmup`, plus FastAPI docs (`/docs`, `/openapi.json`, `/redoc`).
+- **Multi-model dispatch smoke**: `POST /api/v1/generation/wav2lip` and `POST /api/v1/generation/musetalk` both create tasks and immediately fail them with `error=directml_unavailable` for the matching provider (no CPU fallback) when the matching runtime is missing — this confirms the dispatch logic routes the request to the right engine and surfaces the right error message.
 - **Frontend tsc**: `tsc --noEmit` exited 0 with no errors.
-- **Frontend vite build**: built in 2.69s, 1600 modules transformed → `dist/index.html 0.54 kB`, `dist/assets/index-t1fypwZ1.css 25.40 kB`, `dist/assets/index-DXdifc5j.js 403.81 kB (gzip 128.32 kB)`.
-- **File structure**: backend/frontend/models all present per the find listings; `.trae/specs/singing-digital-human/` contains `checklist.md`, `spec.md`, `tasks.md`. Wav2Lip-ONNX is the only inference model; no SadTalker or LatentSync code/weights remain (the single textual mention is in `frontend/src/components/ModelInfoCard.tsx`, which explicitly states they have been removed).
+- **Frontend vite build**: built in 2.65s, 1601 modules transformed → `dist/index.html 0.54 kB`, `dist/assets/index-DvXdNg6C.css 27.04 kB`, `dist/assets/index-uUrix3D4.js 413.86 kB (gzip 131.32 kB)`.
+- **File structure**: backend/frontend/models all present per the find listings; `.trae/specs/singing-digital-human/` contains `checklist.md`, `spec.md`, `tasks.md`. `models/wav2lip/` and `models/vocal_separation/` are reserved for ONNX weights; `models/musetalk/` is the new step-2 reservation.
 - **Caveats**:
-  - `models/wav2lip/` is empty (only `.gitkeep` + README). The Wav2Lip and face-detection ONNX weights must be supplied by the user before any actual video generation; the backend correctly surfaces a `model_not_loaded` error otherwise.
+  - `models/wav2lip/` is empty (only `.gitkeep` + README) and `models/vocal_separation/` is empty (only `.gitkeep` + README). The Wav2Lip and face-detection ONNX weights, plus any vocal-separation ONNX weights, must be supplied by the user before actual video generation; the backend correctly surfaces `model_not_loaded` for Wav2Lip and a soft WARN downgrade for vocal separation otherwise.
+  - `models/musetalk/` is the step-2 reservation. Even when weights are present, `MuseTalkEngine.generate` currently raises `MuseTalkNotImplemented` (the engine skeleton + DirectML strict strategy + routes are all wired, but the inference graph is intentionally a future deliverable).
   - AMD 6700XT-specific DirectML verification and full end-to-end run require the target GPU hardware and the ONNX weights; these could not be exercised in this Linux CI sandbox and are marked [ ] in the checklist above.
   - Cosmetic deprecation warnings (FastAPI `on_event`, `pythonjsonlogger.jsonlogger` import path, `httpx`+`starlette.testclient`) do not affect functionality.

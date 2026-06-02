@@ -22,6 +22,7 @@ class TaskRecord:
     params: Optional[Dict[str, Any]] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    model: str = "wav2lip"
     created_at: float = field(default_factory=lambda: time.time())
     updated_at: float = field(default_factory=lambda: time.time())
     request_id: Optional[str] = None
@@ -69,6 +70,7 @@ class TaskManager:
         params: Optional[Dict[str, Any]] = None,
         request_id: Optional[str] = None,
         task_id: Optional[str] = None,
+        model: str = "wav2lip",
     ) -> str:
         tid = task_id or new_id(prefix="gen_", length=14)
         record = TaskRecord(
@@ -79,6 +81,7 @@ class TaskManager:
             message="task created",
             params=dict(params) if isinstance(params, dict) else None,
             request_id=request_id,
+            model=str(model or "wav2lip").lower(),
         )
         with self._mu:
             self._tasks[tid] = record
@@ -86,7 +89,12 @@ class TaskManager:
         self._prune_if_needed()
         _logger.info(
             "task created",
-            extra={"stage": "task.create", "task_id": tid, "request_id": request_id or "-"},
+            extra={
+                "stage": "task.create",
+                "task_id": tid,
+                "request_id": request_id or "-",
+                "task_model": record.model,
+            },
         )
         return tid
 
@@ -220,6 +228,7 @@ class TaskManager:
             "params": rec.params,
             "result": rec.result,
             "error": rec.error,
+            "model": rec.model,
             "created_at": float(rec.created_at),
             "updated_at": float(rec.updated_at),
             "request_id": rec.request_id,
