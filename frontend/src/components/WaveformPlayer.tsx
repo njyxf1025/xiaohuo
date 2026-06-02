@@ -118,9 +118,14 @@ export default function WaveformPlayer({
     };
   }, [peaks, safeDuration, height, musicId]);
 
-  // musicId change / unmount: drop the audio + blob URL. We do NOT call
+  // musicId change / unmount: drop the audio. We do NOT call
   // audio.load() or removeAttribute("src") — both would abort any
-  // in-flight <audio> fetch and Chrome logs that as ERR_ABORTED.
+  // in-flight <audio> fetch and Chrome logs that as ERR_ABORTED. We
+  // also deliberately do NOT call URL.revokeObjectURL here: revoking
+  // a blob: URL that the audio is still pulling bytes from causes
+  // Chrome's media decoder to abort mid-stream and surface
+  // `net::ERR_ABORTED blob:…`. Letting the blob die with the audio
+  // local variable via GC is safe and memory-cheap.
   useEffect(() => {
     musicIdRef.current = musicId;
     setAudioStatus("idle");
@@ -134,14 +139,6 @@ export default function WaveformPlayer({
       }
       audioRef.current = null;
     }
-    if (blobUrlRef.current) {
-      try {
-        URL.revokeObjectURL(blobUrlRef.current);
-      } catch {
-        /* noop */
-      }
-      blobUrlRef.current = null;
-    }
     return () => {
       if (audioRef.current) {
         try {
@@ -150,14 +147,6 @@ export default function WaveformPlayer({
           /* noop */
         }
         audioRef.current = null;
-      }
-      if (blobUrlRef.current) {
-        try {
-          URL.revokeObjectURL(blobUrlRef.current);
-        } catch {
-          /* noop */
-        }
-        blobUrlRef.current = null;
       }
     };
   }, [musicId]);
