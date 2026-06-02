@@ -289,6 +289,20 @@ class AvatarService:
         content_type: Optional[str],
         data: bytes,
     ) -> AvatarRecord:
+        import asyncio
+        return await asyncio.to_thread(
+            self._upload_blocking,
+            filename=filename,
+            content_type=content_type,
+            data=data,
+        )
+
+    def _upload_blocking(
+        self,
+        filename: str,
+        content_type: Optional[str],
+        data: bytes,
+    ) -> AvatarRecord:
         _, ext = file_utils.split_ext(filename or "")
         if not ext:
             ext = self.extension_from_mime(content_type)
@@ -311,7 +325,7 @@ class AvatarService:
         target_ext = ext if ext else ("jpg" if kind == "image" else "mp4")
         target_name = f"{avatar_id}.{target_ext}"
         target_path = self.uploads_dir / target_name
-        await file_utils.write_bytes_async(target_path, data)
+        Path(target_path).write_bytes(data)
 
         thumb_path = self.thumbs_dir / f"{avatar_id}.jpg"
         face_box: Optional[FaceBox] = None

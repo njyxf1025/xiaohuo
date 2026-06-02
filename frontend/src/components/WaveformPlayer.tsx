@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import { Pause, Play, RotateCcw, Scissors } from "lucide-react";
 
+import { getMusicDownloadUrl } from "../api/music";
 import { cn, formatTime } from "../lib/utils";
 
 export interface WaveformPlayerProps {
@@ -64,11 +65,12 @@ export default function WaveformPlayer({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const audioUrl = getMusicDownloadUrl(musicId);
     const ws = WaveSurfer.create({
       container: containerRef.current,
       height,
       waveColor: "rgba(148, 163, 184, 0.55)",
-      progressColor: "rgba(139, 92, 246, 0.95)",
+      progressColor: "rgba(139, 92, 252, 0.95)",
       cursorColor: "rgba(226, 232, 240, 0.9)",
       cursorWidth: 1,
       barWidth: 2,
@@ -77,29 +79,42 @@ export default function WaveformPlayer({
       normalize: true,
       interact: true,
       hideScrollbar: true,
+      url: audioUrl,
     });
     wsRef.current = ws;
 
-    const onReady = () => setReady(true);
+    const onReady = () => {
+      const realDur = ws.getDuration();
+      if (realDur > 0 && Math.abs(realDur - safeDuration) > 0.5) {
+        setRange((prev) => {
+          const scale = realDur / safeDuration;
+          return { start: prev.start * scale, end: Math.min(realDur, prev.end * scale) };
+        });
+      }
+      setReady(true);
+    };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onFinish = () => setIsPlaying(false);
     const onTime = (t: number) => setPosition(t);
+    const onError = (err: unknown) => {
+      console.warn("WaveSurfer audio load failed; falling back to peaks-only mode", err);
+      if (peaks && peaks.length > 0 && safeDuration > 0) {
+        try {
+          const channelPeaks: number[][] = [peaks];
+          ws.load("", channelPeaks, safeDuration);
+        } catch (e) {
+          console.warn("fallback peaks load failed", e);
+        }
+      }
+    };
 
     ws.on("ready", onReady);
     ws.on("play", onPlay);
     ws.on("pause", onPause);
     ws.on("finish", onFinish);
     ws.on("timeupdate", onTime);
-
-    if (peaks && peaks.length > 0 && safeDuration > 0) {
-      try {
-        const channelPeaks: number[][] = [peaks];
-        ws.load("", channelPeaks, safeDuration);
-      } catch (e) {
-        console.warn("WaveSurfer load failed", e);
-      }
-    }
+    ws.on("error", onError);
 
     return () => {
       try {
@@ -109,7 +124,7 @@ export default function WaveformPlayer({
       }
       wsRef.current = null;
     };
-  }, [peaks, safeDuration, height, musicId]);
+  }, [musicId, peaks, safeDuration, height]);
 
   useEffect(() => {
     const ws = wsRef.current;
@@ -151,6 +166,8 @@ export default function WaveformPlayer({
   const resetRange = () => {
     setRange(initial);
   };
+
+  const audioReady = ready && safeDuration > 0;
 
   const startPct = safeDuration > 0 ? (range.start / safeDuration) * 100 : 0;
   const endPct = safeDuration > 0 ? (range.end / safeDuration) * 100 : 100;
@@ -270,15 +287,35 @@ export default function WaveformPlayer({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={togglePlay} className="btn-primary">
+        <button
+          type="button"
+          onClick={togglePlay}
+          className="btn-primary"
+          disabled={!audioReady}
+          aria-label={isPlaying ? "暂停试听" : "试听整段"}
+          title={audioReady ? (isPlaying ? "暂停试听" : "试听整段") : "音频加载中…"}
+        >
           {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           {isPlaying ? "暂停" : "试听整段"}
         </button>
-        <button type="button" onClick={playSegment} className="btn-ghost">
+        <button
+          type="button"
+          onClick={playSegment}
+          className="btn-ghost"
+          disabled={!audioReady}
+          aria-label="试听所选区间"
+          title={audioReady ? "试听所选区间" : "音频加载中…"}
+        >
           <Scissors className="h-4 w-4" />
           试听所选区间
         </button>
-        <button type="button" onClick={resetRange} className="btn-ghost">
+        <button
+          type="button"
+          onClick={resetRange}
+          className="btn-ghost"
+          disabled={!chorus && initialStart == null && initialEnd == null}
+          aria-label="重置为自动检测"
+        >
           <RotateCcw className="h-4 w-4" />
           重置为自动检测
         </button>

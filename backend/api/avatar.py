@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,13 @@ from services.avatar_service import (
     PresetAvatarRecord,
     get_avatar_service,
 )
+
+
+def _read_all_bytes(upload: UploadFile) -> bytes:
+    data = upload.file.read()
+    if len(data) > MAX_VIDEO_BYTES:
+        raise ValueError(f"file exceeds max size ({MAX_VIDEO_BYTES} bytes)")
+    return data
 
 _logger = get_logger("api.avatar")
 
@@ -133,27 +141,24 @@ async def upload_avatar(
     filename = file.filename or "upload.bin"
     content_type = file.content_type
 
-    chunks: list[bytes] = []
-    total = 0
     try:
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > MAX_VIDEO_BYTES:
-                return _error_response(
-                    request,
-                    413,
-                    "file_too_large",
-                    f"file exceeds max size ({MAX_VIDEO_BYTES} bytes)",
-                    stage="avatar.upload",
-                )
-            chunks.append(chunk)
-    finally:
+        payload = await asyncio.to_thread(_read_all_bytes, file)
+    except ValueError as exc:
         await file.close()
+        return _error_response(
+            request,
+            413,
+            "file_too_large",
+            str(exc),
+            stage="avatar.upload",
+        )
+    finally:
+        try:
+            await file.close()
+        except Exception:
+            pass
 
-    if not chunks:
+    if not payload:
         return _error_response(
             request,
             400,
@@ -161,8 +166,6 @@ async def upload_avatar(
             "uploaded file is empty",
             stage="avatar.upload",
         )
-
-    payload = b"".join(chunks)
 
     ext = Path(filename).suffix.lower().lstrip(".")
     if not ext and content_type:

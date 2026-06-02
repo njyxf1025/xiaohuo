@@ -15,6 +15,7 @@ def main() -> None:
         port=port,
         log_level=log_level,
         reload=False,
+        http="h11",
     )
 
 

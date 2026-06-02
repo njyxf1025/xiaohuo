@@ -18,7 +18,7 @@ function generateRequestId(): string {
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: NORMALIZED_BASE,
-  timeout: 120_000,
+  timeout: 300_000,
   maxContentLength: 500 * 1024 * 1024,
   maxBodyLength: 500 * 1024 * 1024,
   headers: {
@@ -53,7 +53,12 @@ apiClient.interceptors.response.use(
       error.message ||
       "请求失败，请稍后重试";
     if (status && status >= 500) {
-      toast.error(`服务器错误 (${status}): ${message}`);
+      const friendly = status === 504
+        ? "网关响应超时（文件可能较大或后端处理较慢），请稍后重试"
+        : status === 502
+          ? "网关无响应，请检查后端服务是否运行"
+          : `服务器错误 (${status}): ${message}`;
+      toast.error(friendly);
     } else if (status === 413) {
       toast.error(`文件过大: ${message}`);
     } else if (status === 404) {

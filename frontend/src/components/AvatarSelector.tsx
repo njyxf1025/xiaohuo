@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Image as ImageIcon, Loader2, Trash2, Upload, User } from "lucide-react";
+import { Check, Image as ImageIcon, Loader2, RotateCcw, Trash2, Upload, User } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -17,6 +17,12 @@ import { cn, formatBytes } from "../lib/utils";
 
 type Tab = "preset" | "custom";
 
+interface PresetOverride {
+  dataUrl: string;
+  filename: string;
+  uploadedAt: number;
+}
+
 export default function AvatarSelector() {
   const [tab, setTab] = useState<Tab>("preset");
   const [presets, setPresets] = useState<PresetAvatar[]>([]);
@@ -24,9 +30,30 @@ export default function AvatarSelector() {
   const [loadingPresets, setLoadingPresets] = useState(false);
   const [loadingAvatars, setLoadingAvatars] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [presetOverrides, setPresetOverrides] = useState<Record<string, PresetOverride>>(
+    () => {
+      try {
+        const raw = localStorage.getItem("sdh-preset-overrides");
+        return raw ? (JSON.parse(raw) as Record<string, PresetOverride>) : {};
+      } catch {
+        return {};
+      }
+    },
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const presetFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [activePresetForUpload, setActivePresetForUpload] = useState<string | null>(null);
+  const [presetUploading, setPresetUploading] = useState(false);
   const selected = useStore((s) => s.selectedAvatar);
   const setSelected = useStore((s) => s.setSelectedAvatar);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sdh-preset-overrides", JSON.stringify(presetOverrides));
+    } catch (e) {
+      console.warn("failed to persist preset overrides", e);
+    }
+  }, [presetOverrides]);
 
   const loadPresets = async () => {
     setLoadingPresets(true);
@@ -58,6 +85,65 @@ export default function AvatarSelector() {
   }, []);
 
   const onUploadClick = () => fileInputRef.current?.click();
+
+  const onPresetReplaceClick = (presetId: string) => {
+    setActivePresetForUpload(presetId);
+    presetFileInputRef.current?.click();
+  };
+
+  const readAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("read failed"));
+      reader.readAsDataURL(file);
+    });
+
+  const onPresetReplaceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const presetId = activePresetForUpload;
+    setActivePresetForUpload(null);
+    if (!file || !presetId) return;
+    setPresetUploading(true);
+    try {
+      const dataUrl = await readAsDataUrl(file);
+      setPresetOverrides((prev) => ({
+        ...prev,
+        [presetId]: { dataUrl, filename: file.name, uploadedAt: Date.now() },
+      }));
+      const preset = presets.find((p) => p.preset_id === presetId);
+      if (preset) {
+        setSelected({
+          kind: "preset",
+          id: preset.preset_id,
+          name: preset.name,
+          thumbnailUrl: dataUrl,
+        });
+      }
+      toast.success(`已替换为「${file.name}」`);
+    } catch (err) {
+      console.error(err);
+      toast.error("读取图片失败");
+    } finally {
+      setPresetUploading(false);
+    }
+  };
+
+  const resetPresetOverride = (presetId: string) => {
+    setPresetOverrides((prev) => {
+      const next = { ...prev };
+      delete next[presetId];
+      return next;
+    });
+    if (selected?.kind === "preset" && selected.id === presetId) {
+      const p = presets.find((x) => x.preset_id === presetId);
+      if (p) {
+        setSelected({ kind: "preset", id: p.preset_id, name: p.name, thumbnailUrl: p.thumbnail_url });
+      }
+    }
+    toast.success("已恢复预设形象");
+  };
 
   const onUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -186,6 +272,15 @@ export default function AvatarSelector() {
         </div>
       )}
 
+      <input
+        ref={presetFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={onPresetReplaceFile}
+        className="hidden"
+        aria-hidden="true"
+      />
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {isLoading && (
           <div className="col-span-full flex items-center justify-center py-10 text-slate-500">
@@ -204,11 +299,11 @@ export default function AvatarSelector() {
         {tab === "preset" &&
           presets.map((p) => {
             const isSel = selected?.kind === "preset" && selected.id === p.preset_id;
+            const override = presetOverrides[p.preset_id];
+            const thumbSrc = override?.dataUrl ?? getPresetThumbUrl(p.preset_id);
             return (
-              <button
+              <div
                 key={p.preset_id}
-                type="button"
-                onClick={() => selectPreset(p)}
                 className={cn(
                   "group relative overflow-hidden rounded-xl border bg-slate-900/40 text-left transition",
                   isSel
@@ -216,35 +311,66 @@ export default function AvatarSelector() {
                     : "border-slate-800 hover:border-slate-600",
                 )}
               >
-                <div className="aspect-[4/5] w-full overflow-hidden bg-slate-800">
-                  <img
-                    src={getPresetThumbUrl(p.preset_id)}
-                    alt={p.name}
-                    className="h-full w-full object-cover transition group-hover:scale-105"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-                    }}
-                  />
-                </div>
-                <div className="flex items-center justify-between p-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-100">
-                      {p.name}
-                    </p>
-                    {p.description && (
-                      <p className="truncate text-xs text-slate-500">
-                        {p.description}
+                <button
+                  type="button"
+                  onClick={() => selectPreset(p)}
+                  className="block w-full text-left"
+                >
+                  <div className="aspect-[4/5] w-full overflow-hidden bg-slate-800">
+                    <img
+                      src={thumbSrc}
+                      alt={p.name}
+                      className="h-full w-full object-cover transition group-hover:scale-105"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-100">
+                        {p.name}
                       </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {override ? `已替换：${override.filename}` : (p.description || "点击选中")}
+                      </p>
+                    </div>
+                    {isSel && (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-white">
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
                     )}
                   </div>
-                  {isSel && (
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-white">
-                      <Check className="h-3.5 w-3.5" />
-                    </span>
+                </button>
+                <div className="absolute right-2 top-2 flex flex-col gap-1.5 opacity-0 transition group-hover:opacity-100">
+                  <button
+                    type="button"
+                    onClick={() => onPresetReplaceClick(p.preset_id)}
+                    disabled={presetUploading && activePresetForUpload === p.preset_id}
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/70 text-slate-200 transition hover:bg-brand-500 hover:text-white disabled:opacity-50"
+                    aria-label="替换形象"
+                    title="替换为我的形象"
+                  >
+                    {presetUploading && activePresetForUpload === p.preset_id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  {override && (
+                    <button
+                      type="button"
+                      onClick={() => resetPresetOverride(p.preset_id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/70 text-slate-200 transition hover:bg-rose-500 hover:text-white"
+                      aria-label="恢复预设"
+                      title="恢复为系统预设"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
         {tab === "custom" &&
