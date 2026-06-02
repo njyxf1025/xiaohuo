@@ -129,8 +129,14 @@ export async function startGenerationMuseTalk(
   return data;
 }
 
-export async function getTask(taskId: string): Promise<TaskStatusResponse> {
-  const { data } = await apiClient.get<TaskStatusResponse>(`/generation/${taskId}`);
+export async function getTask(
+  taskId: string,
+  config?: { signal?: AbortSignal },
+): Promise<TaskStatusResponse> {
+  const { data } = await apiClient.get<TaskStatusResponse>(
+    `/generation/${taskId}`,
+    { signal: config?.signal },
+  );
   return data;
 }
 

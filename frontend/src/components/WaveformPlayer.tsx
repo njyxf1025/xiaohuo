@@ -62,13 +62,22 @@ export default function WaveformPlayer({
   const draggingRef = useRef<null | "start" | "end">(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
-  // Audio is *fully* lazy. The download URL is only ever hit on the
-  // user's first click of 试听整段 / 试听所选区间. The result is wrapped
-  // in a blob: URL and assigned to a freshly-built <audio>, so the
-  // trae preview proxy never sees a lifecycle-driven fetch that it can
-  // cancel and turn into a red [error] net::ERR_ABORTED.
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const blobUrlRef = useRef<string | null>(null);
+  // Web Audio API playback state. We use AudioContext + decodeAudioData +
+  // AudioBufferSourceNode instead of HTMLMediaElement. Reasons:
+  //   * No HTMLMediaElement means Chrome's media decoder ERR_ABORTED
+  //     log path is not involved at all.
+  //   * AudioBufferSourceNode is fire-and-forget; stopping it via
+  //     .stop() does not produce any console error.
+  //   * The fetch that pulls audio bytes goes through the standard
+  //     fetch API; if it gets aborted by the trae proxy during a
+  //     React lifecycle transition, the rejection is a plain
+  //     promise reject (no red [error] net::ERR_ABORTED log).
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const startedAtRef = useRef<number>(0); // AudioContext.currentTime at start
+  const offsetAtStartRef = useRef<number>(0); // playback offset (sec) at start
+  const positionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const musicIdRef = useRef(musicId);
   const rangeRef = useRef(range);
   useEffect(() => {
@@ -79,8 +88,7 @@ export default function WaveformPlayer({
     setRange(initial);
   }, [initial.start, initial.end, musicId]);
 
-  // Wavesurfer is used ONLY as a static waveform renderer. We never
-  // pass `url`, so it never issues a fetch.
+  // Wavesurfer: static peaks only, no fetch.
   useEffect(() => {
     if (!containerRef.current) return;
     const ws = WaveSurfer.create({
@@ -118,78 +126,87 @@ export default function WaveformPlayer({
     };
   }, [peaks, safeDuration, height, musicId]);
 
-  // musicId change / unmount: drop the audio. We do NOT call
-  // audio.load() or removeAttribute("src") — both would abort any
-  // in-flight <audio> fetch and Chrome logs that as ERR_ABORTED. We
-  // also deliberately do NOT call URL.revokeObjectURL here: revoking
-  // a blob: URL that the audio is still pulling bytes from causes
-  // Chrome's media decoder to abort mid-stream and surface
-  // `net::ERR_ABORTED blob:…`. Letting the blob die with the audio
-  // local variable via GC is safe and memory-cheap.
+  // musicId change / unmount: stop any playing source and drop the
+  // cached AudioBuffer. We do NOT call ctx.close() — the AudioContext
+  // is shared (lazily created) and a reused context does not produce
+  // any abort noise.
   useEffect(() => {
     musicIdRef.current = musicId;
     setAudioStatus("idle");
     setIsPlaying(false);
     setPosition(0);
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-      } catch {
-        /* noop */
-      }
-      audioRef.current = null;
-    }
+    stopSource();
+    audioBufferRef.current = null;
     return () => {
-      if (audioRef.current) {
+      stopSource();
+      audioBufferRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicId]);
+
+  function stopSource() {
+    if (positionTimerRef.current) {
+      clearInterval(positionTimerRef.current);
+      positionTimerRef.current = null;
+    }
+    const src = sourceRef.current;
+    if (src) {
+      sourceRef.current = null;
+      try {
+        src.stop();
+      } catch {
+        /* already stopped */
+      }
+    }
+  }
+
+  // Lazily fetch + decode the audio. The download URL is only ever hit
+  // on the user's first click of 试听整段 / 试听所选区间. If the fetch
+  // is cancelled mid-flight (e.g. React unmount during the round-trip)
+  // the rejection is a normal fetch abort, NOT a red
+  // [error] net::ERR_ABORTED — that's specific to XHR / media
+  // elements.
+  const ensureAudioReady = async (): Promise<boolean> => {
+    if (audioStatus === "unavailable") return false;
+    if (audioBufferRef.current && audioCtxRef.current) return true;
+    if (audioStatus === "loading") return false;
+    setAudioStatus("loading");
+    const targetId = musicId;
+    try {
+      const r = await fetch(getMusicDownloadUrl(targetId));
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const arrayBuf = await r.arrayBuffer();
+      if (musicIdRef.current !== targetId) return false;
+      let ctx = audioCtxRef.current;
+      if (!ctx) {
+        const Ctor =
+          (typeof window !== "undefined" &&
+            ((window as unknown as { AudioContext?: typeof AudioContext })
+              .AudioContext ||
+              (window as unknown as {
+                webkitAudioContext?: typeof AudioContext;
+              }).webkitAudioContext)) ||
+          null;
+        if (!Ctor) throw new Error("AudioContext not supported");
+        ctx = new Ctor();
+        audioCtxRef.current = ctx;
+      }
+      if (ctx.state === "suspended") {
         try {
-          audioRef.current.pause();
+          await ctx.resume();
         } catch {
           /* noop */
         }
-        audioRef.current = null;
       }
-    };
-  }, [musicId]);
-
-  // Lazily bring up the audio element. If it's already ready, call
-  // onReady immediately; if a load is in flight, queue the callback on
-  // the next loadedmetadata; otherwise start a fresh fetch+blob load.
-  const ensureAudioReady = (onReady: (audio: HTMLAudioElement) => void) => {
-    if (audioStatus === "unavailable") return;
-    const current = audioRef.current;
-    if (current && audioStatus === "ready") {
-      try {
-        onReady(current);
-      } catch (e) {
-        console.warn(e);
-      }
-      return;
-    }
-    if (audioStatus === "loading" && current) {
-      current.addEventListener(
-        "loadedmetadata",
-        () => {
-          try {
-            onReady(current);
-          } catch (e) {
-            console.warn(e);
-          }
-        },
-        { once: true }
-      );
-      return;
-    }
-    setAudioStatus("loading");
-    const audio = new Audio();
-    audio.preload = "metadata";
-    const onLoadedMeta = () => {
-      if (musicIdRef.current !== musicId) return;
-      const realDur = audio.duration;
+      const buffer = await ctx.decodeAudioData(arrayBuf.slice(0));
+      if (musicIdRef.current !== targetId) return false;
+      audioBufferRef.current = buffer;
       if (
-        realDur > 0 &&
-        Number.isFinite(realDur) &&
-        Math.abs(realDur - safeDuration) > 0.5
+        buffer.duration > 0 &&
+        Number.isFinite(buffer.duration) &&
+        Math.abs(buffer.duration - safeDuration) > 0.5
       ) {
+        const realDur = buffer.duration;
         setRange((prev) => {
           const scale = realDur / safeDuration;
           return {
@@ -199,107 +216,91 @@ export default function WaveformPlayer({
         });
       }
       setAudioStatus("ready");
-      try {
-        onReady(audio);
-      } catch (e) {
-        console.warn(e);
-      }
-    };
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onEnded = () => setIsPlaying(false);
-    const onTimeUpdate = () => {
-      setPosition(audio.currentTime);
-      if (audio.currentTime > rangeRef.current.end) {
-        try {
-          audio.pause();
-          audio.currentTime = rangeRef.current.start;
-        } catch {
-          /* noop */
-        }
-        setIsPlaying(false);
-      }
-    };
-    const onError = () => {
-      if (musicIdRef.current !== musicId) return;
+      return true;
+    } catch (e) {
+      if (musicIdRef.current !== targetId) return false;
+      // AbortError from fetch().abort() is a normal lifecycle event
+      // — do not surface it as a warning either.
+      const name = (e && (e as { name?: string }).name) || "";
+      if (name === "AbortError") return false;
       console.warn(
-        "WaveformPlayer: audio playback error (peaks-only mode)."
+        "WaveformPlayer: audio fetch/decode failed (peaks-only mode):",
+        (e && (e as Error).message) || e
       );
       setAudioStatus("unavailable");
       setIsPlaying(false);
-    };
-    audio.addEventListener("loadedmetadata", onLoadedMeta);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("error", onError);
-    audioRef.current = audio;
+      return false;
+    }
+  };
 
-    const targetId = musicId;
-    fetch(getMusicDownloadUrl(targetId))
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.blob();
-      })
-      .then((blob) => {
-        if (musicIdRef.current !== targetId || audioRef.current !== audio) {
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        blobUrlRef.current = url;
-        audio.src = url;
-        audio.load();
-      })
-      .catch((err) => {
-        if (musicIdRef.current !== targetId) return;
-        console.warn(
-          "WaveformPlayer: audio fetch failed (peaks-only mode):",
-          (err && (err as Error).message) || err
-        );
-        setAudioStatus("unavailable");
+  function playFromOffset(offsetSec: number) {
+    const ctx = audioCtxRef.current;
+    const buffer = audioBufferRef.current;
+    if (!ctx || !buffer) return;
+    const clamped = Math.max(0, Math.min(buffer.duration, offsetSec));
+    stopSource();
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    sourceRef.current = src;
+    offsetAtStartRef.current = clamped;
+    startedAtRef.current = ctx.currentTime;
+    try {
+      src.start(0, clamped);
+    } catch (e) {
+      console.warn(e);
+      return;
+    }
+    setIsPlaying(true);
+    setPosition(clamped);
+    positionTimerRef.current = setInterval(() => {
+      const c = audioCtxRef.current;
+      const s = sourceRef.current;
+      if (!c || !s) return;
+      const elapsed = c.currentTime - startedAtRef.current;
+      const pos = offsetAtStartRef.current + elapsed;
+      setPosition(pos);
+      // Auto-stop at end of selected segment.
+      if (pos > rangeRef.current.end) {
+        stopSource();
         setIsPlaying(false);
-      });
+        setPosition(rangeRef.current.start);
+      }
+    }, 100);
+    src.onended = () => {
+      if (sourceRef.current !== src) return;
+      sourceRef.current = null;
+      if (positionTimerRef.current) {
+        clearInterval(positionTimerRef.current);
+        positionTimerRef.current = null;
+      }
+      setIsPlaying(false);
+    };
+  }
+
+  const playSegment = async () => {
+    if (audioStatus === "unavailable") return;
+    const ok = await ensureAudioReady();
+    if (!ok) return;
+    playFromOffset(range.start);
   };
 
-  useEffect(() => {
-    onChange?.(range);
-  }, [range, onChange]);
-
-  const playSegment = () => {
+  const togglePlay = async () => {
     if (audioStatus === "unavailable") return;
-    ensureAudioReady((audio) => {
-      try {
-        audio.currentTime = range.start;
-        const p = audio.play();
-        if (p && typeof p.catch === "function") p.catch(() => setIsPlaying(false));
-      } catch (e) {
-        console.warn(e);
-      }
-    });
-  };
-
-  const togglePlay = () => {
-    if (audioStatus === "unavailable") return;
-    ensureAudioReady((audio) => {
-      try {
-        if (isPlaying) {
-          audio.pause();
-        } else {
-          const p = audio.play();
-          if (p && typeof p.catch === "function") p.catch(() => setIsPlaying(false));
-        }
-      } catch (e) {
-        console.warn(e);
-      }
-    });
+    if (isPlaying) {
+      stopSource();
+      setIsPlaying(false);
+      return;
+    }
+    const ok = await ensureAudioReady();
+    if (!ok) return;
+    const pos = position > 0 ? position : 0;
+    playFromOffset(pos);
   };
 
   const resetRange = () => {
     setRange(initial);
   };
-
-  const audioPlayable = audioStatus === "ready" && safeDuration > 0;
 
   const startPct = safeDuration > 0 ? (range.start / safeDuration) * 100 : 0;
   const endPct = safeDuration > 0 ? (range.end / safeDuration) * 100 : 100;

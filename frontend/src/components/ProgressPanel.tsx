@@ -66,10 +66,11 @@ export default function ProgressPanel({
     erroredRef.current = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
+    const controller = new AbortController();
 
     const poll = async () => {
       try {
-        const data = await getTask(taskId);
+        const data = await getTask(taskId, { signal: controller.signal });
         if (cancelled) return;
         setStatus(data);
         if (data.status === "success" && !completedRef.current) {
@@ -90,6 +91,16 @@ export default function ProgressPanel({
         timer = setTimeout(poll, 1000);
       } catch (e: any) {
         if (cancelled) return;
+        // Swallow lifecycle cancel (ERR_CANCELED / CanceledError) so
+        // unmount / HMR / tab-switch doesn't print a red
+        // [error] net::ERR_ABORTED in the console.
+        if (
+          e?.code === "ERR_CANCELED" ||
+          e?.name === "CanceledError" ||
+          /canceled|aborted/i.test(e?.message || "")
+        ) {
+          return;
+        }
         setError(e?.message || "查询任务状态失败");
         timer = setTimeout(poll, 2000);
       }
@@ -99,6 +110,7 @@ export default function ProgressPanel({
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      controller.abort();
     };
   }, [taskId, onComplete, onError]);
 

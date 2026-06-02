@@ -69,6 +69,18 @@ apiClient.interceptors.response.use(
       toast.error(message);
     } else if (error.code === "ECONNABORTED") {
       toast.error("请求超时，请检查后端服务是否运行");
+    } else if (
+      error.code === "ERR_CANCELED" ||
+      error.name === "CanceledError" ||
+      axios.isCancel(error) ||
+      /canceled|aborted/i.test(error.message || "")
+    ) {
+      // Lifecycle cancel (React unmount, HMR, tab switch) — expected
+      // and noisy. Swallow silently so it does NOT become a red
+      // [error] net::ERR_ABORTED in the console and does NOT trigger
+      // a misleading toast. The caller still sees the rejection and
+      // can decide what to do.
+      return Promise.reject(error);
     } else {
       toast.error(message);
     }
