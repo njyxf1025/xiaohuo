@@ -32,7 +32,6 @@ export default function WaveformPlayer({
 }: WaveformPlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [ready, setReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -63,16 +62,25 @@ export default function WaveformPlayer({
   const draggingRef = useRef<null | "start" | "end">(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
+  // Audio is *fully* lazy. The download URL is only ever hit on the
+  // user's first click of 试听整段 / 试听所选区间. The result is wrapped
+  // in a blob: URL and assigned to a freshly-built <audio>, so the
+  // trae preview proxy never sees a lifecycle-driven fetch that it can
+  // cancel and turn into a red [error] net::ERR_ABORTED.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+  const musicIdRef = useRef(musicId);
+  const rangeRef = useRef(range);
+  useEffect(() => {
+    rangeRef.current = range;
+  }, [range.start, range.end]);
+
   useEffect(() => {
     setRange(initial);
   }, [initial.start, initial.end, musicId]);
 
-  // Wavesurfer is used ONLY as a static waveform renderer. We never pass
-  // `url` so it never issues a fetch (the trae preview proxy was killing
-  // those requests with ERR_ABORTED, leaving the UI stuck on "波形加载中…").
-  // Audio playback is driven by a separate, fully-controlled <audio>
-  // element below — if the audio fetch fails the user can still drag the
-  // selection range and the waveform stays visible.
+  // Wavesurfer is used ONLY as a static waveform renderer. We never
+  // pass `url`, so it never issues a fetch.
   useEffect(() => {
     if (!containerRef.current) return;
     const ws = WaveSurfer.create({
@@ -110,22 +118,89 @@ export default function WaveformPlayer({
     };
   }, [peaks, safeDuration, height, musicId]);
 
-  // Drive audio with a plain <audio> element. We give it the download URL
-  // directly and only swap to the live element after a successful load.
-  // When the network blocks the audio (404 / 503 / abort) we mark it
-  // "unavailable" and the play buttons become disabled — no more red
-  // console errors.
+  // musicId change / unmount: drop the audio + blob URL. We do NOT call
+  // audio.load() or removeAttribute("src") — both would abort any
+  // in-flight <audio> fetch and Chrome logs that as ERR_ABORTED.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    musicIdRef.current = musicId;
+    setAudioStatus("idle");
+    setIsPlaying(false);
+    setPosition(0);
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        /* noop */
+      }
+      audioRef.current = null;
+    }
+    if (blobUrlRef.current) {
+      try {
+        URL.revokeObjectURL(blobUrlRef.current);
+      } catch {
+        /* noop */
+      }
+      blobUrlRef.current = null;
+    }
+    return () => {
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {
+          /* noop */
+        }
+        audioRef.current = null;
+      }
+      if (blobUrlRef.current) {
+        try {
+          URL.revokeObjectURL(blobUrlRef.current);
+        } catch {
+          /* noop */
+        }
+        blobUrlRef.current = null;
+      }
+    };
+  }, [musicId]);
+
+  // Lazily bring up the audio element. If it's already ready, call
+  // onReady immediately; if a load is in flight, queue the callback on
+  // the next loadedmetadata; otherwise start a fresh fetch+blob load.
+  const ensureAudioReady = (onReady: (audio: HTMLAudioElement) => void) => {
+    if (audioStatus === "unavailable") return;
+    const current = audioRef.current;
+    if (current && audioStatus === "ready") {
+      try {
+        onReady(current);
+      } catch (e) {
+        console.warn(e);
+      }
+      return;
+    }
+    if (audioStatus === "loading" && current) {
+      current.addEventListener(
+        "loadedmetadata",
+        () => {
+          try {
+            onReady(current);
+          } catch (e) {
+            console.warn(e);
+          }
+        },
+        { once: true }
+      );
+      return;
+    }
+    setAudioStatus("loading");
     const audio = new Audio();
     audio.preload = "metadata";
-    audio.crossOrigin = "anonymous";
-    audioRef.current = audio;
-    setAudioStatus("loading");
-
-    const onLoadedMetadata = () => {
+    const onLoadedMeta = () => {
+      if (musicIdRef.current !== musicId) return;
       const realDur = audio.duration;
-      if (realDur > 0 && Number.isFinite(realDur) && Math.abs(realDur - safeDuration) > 0.5) {
+      if (
+        realDur > 0 &&
+        Number.isFinite(realDur) &&
+        Math.abs(realDur - safeDuration) > 0.5
+      ) {
         setRange((prev) => {
           const scale = realDur / safeDuration;
           return {
@@ -135,79 +210,100 @@ export default function WaveformPlayer({
         });
       }
       setAudioStatus("ready");
-    };
-    const onTimeUpdate = () => {
-      setPosition(audio.currentTime);
-      if (audio.currentTime > range.end) {
-        audio.pause();
-        audio.currentTime = range.start;
-        setIsPlaying(false);
+      try {
+        onReady(audio);
+      } catch (e) {
+        console.warn(e);
       }
     };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnded = () => setIsPlaying(false);
+    const onTimeUpdate = () => {
+      setPosition(audio.currentTime);
+      if (audio.currentTime > rangeRef.current.end) {
+        try {
+          audio.pause();
+          audio.currentTime = rangeRef.current.start;
+        } catch {
+          /* noop */
+        }
+        setIsPlaying(false);
+      }
+    };
     const onError = () => {
-      console.warn("WaveformPlayer: <audio> error, switching to peaks-only mode.");
+      if (musicIdRef.current !== musicId) return;
+      console.warn(
+        "WaveformPlayer: audio playback error (peaks-only mode)."
+      );
       setAudioStatus("unavailable");
       setIsPlaying(false);
     };
-
-    audio.addEventListener("loadedmetadata", onLoadedMetadata);
-    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("loadedmetadata", onLoadedMeta);
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onEnded);
+    audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("error", onError);
+    audioRef.current = audio;
 
-    audio.src = getMusicDownloadUrl(musicId);
-    audio.load();
-
-    return () => {
-      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("ended", onEnded);
-      audio.removeEventListener("error", onError);
-      try {
-        audio.pause();
-      } catch {
-        /* noop */
-      }
-      audio.removeAttribute("src");
-      audio.load();
-      audioRef.current = null;
-    };
-  }, [musicId, safeDuration, range.end, range.start]);
+    const targetId = musicId;
+    fetch(getMusicDownloadUrl(targetId))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        if (musicIdRef.current !== targetId || audioRef.current !== audio) {
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
+        audio.src = url;
+        audio.load();
+      })
+      .catch((err) => {
+        if (musicIdRef.current !== targetId) return;
+        console.warn(
+          "WaveformPlayer: audio fetch failed (peaks-only mode):",
+          (err && (err as Error).message) || err
+        );
+        setAudioStatus("unavailable");
+        setIsPlaying(false);
+      });
+  };
 
   useEffect(() => {
     onChange?.(range);
   }, [range, onChange]);
 
   const playSegment = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audioStatus !== "ready") return;
-    try {
-      audio.currentTime = range.start;
-      const p = audio.play();
-      if (p && typeof p.catch === "function") p.catch(() => setIsPlaying(false));
-    } catch (e) {
-      console.warn(e);
-    }
+    if (audioStatus === "unavailable") return;
+    ensureAudioReady((audio) => {
+      try {
+        audio.currentTime = range.start;
+        const p = audio.play();
+        if (p && typeof p.catch === "function") p.catch(() => setIsPlaying(false));
+      } catch (e) {
+        console.warn(e);
+      }
+    });
   };
 
   const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audioStatus !== "ready") return;
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      const p = audio.play();
-      if (p && typeof p.catch === "function") p.catch(() => setIsPlaying(false));
-    }
+    if (audioStatus === "unavailable") return;
+    ensureAudioReady((audio) => {
+      try {
+        if (isPlaying) {
+          audio.pause();
+        } else {
+          const p = audio.play();
+          if (p && typeof p.catch === "function") p.catch(() => setIsPlaying(false));
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+    });
   };
 
   const resetRange = () => {
@@ -338,7 +434,7 @@ export default function WaveformPlayer({
           type="button"
           onClick={togglePlay}
           className="btn-primary"
-          disabled={!audioPlayable}
+          disabled={audioStatus === "unavailable"}
           aria-label={isPlaying ? "暂停试听" : "试听整段"}
           title={
             audioStatus === "unavailable"
@@ -357,7 +453,7 @@ export default function WaveformPlayer({
           type="button"
           onClick={playSegment}
           className="btn-ghost"
-          disabled={!audioPlayable}
+          disabled={audioStatus === "unavailable"}
           aria-label="试听所选区间"
           title={
             audioStatus === "unavailable"
