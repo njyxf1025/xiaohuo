@@ -35,8 +35,8 @@ const FEATURES = [
   },
   {
     icon: ShieldCheck,
-    title: "CPU 自动兜底",
-    desc: "DirectML 不可用时无缝回退 CPU。",
+    title: "DirectML 专用管线",
+    desc: "仅 GPU 推理，无 CPU 回退降级。",
   },
   {
     icon: Gauge,
@@ -117,7 +117,7 @@ export default function HomePage() {
                 ONNX 推理
               </span>
               <span className="rounded-md bg-slate-800/80 px-2 py-1">
-                CPU 兜底
+                DirectML 专用
               </span>
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function HomePage() {
                       GPU 设备
                     </p>
                     {gpuDevices.length === 0 ? (
-                      <p className="mt-1 text-slate-400">未检测到 GPU，将使用 CPU 推理</p>
+                      <p className="mt-1 text-slate-400">未检测到 DirectML GPU</p>
                     ) : (
                       <ul className="mt-1 space-y-1 text-slate-300">
                         {gpuDevices.slice(0, 4).map((g: GpuDevice, i: number) => (
