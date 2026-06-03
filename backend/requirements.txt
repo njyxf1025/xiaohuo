@@ -1,18 +1,49 @@
+# ==============================================================================
+# Singing Digital Human — Backend Dependencies
+# ==============================================================================
+# DirectML‑only deployment.  Every ONNX model (Wav2Lip, face detection,
+# vocal separation, resemble denoiser) uses the DmlExecutionProvider
+# exclusively.  CPU fallback is disabled at the code level — inference
+# will refuse to start if onnxruntime-directml is not importable or no
+# DirectML‑capable GPU is detected.
+# ==============================================================================
+
+# Web framework
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
+
+# Data validation
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
+
+# ONNX Runtime — DirectML backend (GPU acceleration via AMD / Intel / NVIDIA)
+# IMPORTANT: onnxruntime-directml MUST be installed first / separately
+# before onnxruntime, otherwise the DmlExecutionProvider will not be
+# registered.  If you are on Python 3.14 where no wheel exists, the
+# service will start in degraded mode (amber UI card, no inference).
+onnxruntime-directml>=1.17.0
+onnxruntime>=1.17.0
+
+# Core numeric / image / audio
 numpy>=1.26.0
 opencv-python-headless>=4.9.0
 librosa>=0.10.1
 soundfile>=0.12.1
-onnxruntime-directml>=1.17.0
-onnxruntime>=1.17.0
-pychorus>=0.0.7
 Pillow>=10.2.0
 aiofiles>=23.2.1
+
+# Audio chorus detection
+pychorus>=0.0.7
+
+# FFmpeg integration (system ffmpeg binary required)
+# This package provides Python bindings; the ffmpeg / ffprobe CLIs
+# must be installed separately (apt install ffmpeg / brew install ffmpeg).
+ffmpeg-python>=0.2.0
+
+# Structured logging
 python-json-logger>=2.0.7
 
+# Testing
 pytest>=8.0.0
 httpx>=0.27.0

@@ -8,6 +8,7 @@ from typing import Callable, List, Optional, Sequence
 import numpy as np
 
 from core.logging import get_logger
+from services.resemble_denoiser import ResembleDenoiser, get_resemble_denoiser
 from services.vocal_separation import (
     VocalSeparationDirectMLNotAvailable,
     VocalSeparationError,
@@ -67,6 +68,7 @@ class PipelineResult:
     mel_shape: tuple
     muxed: bool
     vocal_separation_applied: bool
+    denoised: bool
     vocals_path: Optional[Path] = None
     accompaniment_path: Optional[Path] = None
 
@@ -304,6 +306,33 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
         except VocalSeparationDirectMLNotAvailable:
             raise
 
+    # -------------------------------------------------------------------
+    # Resemble audio denoiser — clean up vocals before Wav2Lip
+    # -------------------------------------------------------------------
+    denoised = False
+    if req.progress_cb is not None:
+        req.progress_cb("denoise", 3.5, "audio denoising (resemble, DirectML)")
+    try:
+        denoiser = get_resemble_denoiser()
+        if denoiser.is_loaded() or denoiser.warmup():
+            denoised_audio = denoiser.denoise(audio_for_mel, sample_rate=sr)
+            if denoised_audio is not None and denoised_audio.size > 0:
+                audio_for_mel = denoised_audio.astype(np.float32)
+                denoised = True
+                _logger.info(
+                    "resemble denoiser applied — Wav2Lip will receive clean vocals",
+                    extra={
+                        "stage": "wav2lip.denoised",
+                        "samples": int(audio_for_mel.shape[-1]),
+                    },
+                )
+    except Exception as exc:
+        _logger.warning(
+            "resemble denoiser step failed (%s) — continuing with un-denoised vocals",
+            exc,
+            extra={"stage": "wav2lip.denoise_fallback"},
+        )
+
     if req.progress_cb is not None:
         req.progress_cb("mel_compute", 4.0, f"mel on {audio_for_mel.shape[-1]} samples")
     mel = compute_mel(audio_for_mel, sample_rate=sr)
@@ -380,24 +409,26 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
     muxed = False
     mux_audio: Optional[np.ndarray] = None
     mux_sr: int = sr
-    if vocal_separation_applied and accompaniment_path is not None:
+    # When vocal separation was applied, the Wav2Lip model received clean
+    # vocals but the final video should carry the *original* full mix
+    # (accompaniment + vocals) so the user hears the complete song, not
+    # just a cappella.  We load the original audio slice for muxing.
+    if vocal_separation_applied:
         try:
-            acc_samples, acc_sr = _load_audio_mono(
-                accompaniment_path, target_sr=MEL_SAMPLE_RATE
+            orig_samples, orig_sr = _load_audio_mono(audio_path, target_sr=MEL_SAMPLE_RATE)
+            orig_sliced = _slice_audio(
+                orig_samples, orig_sr, float(req.slice_start), float(req.slice_end),
             )
-            acc_sliced = _slice_audio(
-                acc_samples, acc_sr, float(req.slice_start), float(req.slice_end)
-            )
-            if acc_sliced.size > 0:
-                mux_audio = acc_sliced
-                mux_sr = acc_sr
+            if orig_sliced.size > 0:
+                mux_audio = orig_sliced
+                mux_sr = orig_sr
                 _logger.info(
-                    "using separated accompaniment for final remux "
-                    "(vocals drive lipsync, user hears full song minus vocals)",
-                    extra={"stage": "wav2lip.mux_accompaniment"},
+                    "using original full-mix audio for final remux "
+                    "(Wav2Lip received clean vocals, user hears full song)",
+                    extra={"stage": "wav2lip.mux_original"},
                 )
         except Exception as exc:
-            _logger.warning("accompaniment load failed, falling back to vocals for mux: %s", exc)
+            _logger.warning("original audio load failed for mux: %s", exc)
     if mux_audio is None and req.preserve_audio:
         mux_audio = audio_for_mux
         mux_sr = sr
@@ -453,6 +484,7 @@ def run_pipeline(req: PipelineRequest) -> PipelineResult:
         mel_shape=(int(mel.shape[0]), int(mel.shape[-1])),
         muxed=muxed,
         vocal_separation_applied=vocal_separation_applied,
+        denoised=denoised,
         vocals_path=vocals_path,
         accompaniment_path=accompaniment_path,
     )
